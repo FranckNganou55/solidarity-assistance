@@ -1,0 +1,14 @@
+# Build artefacts
+backend-laravel/vendor/
+frontend-vue/node_modules/
+frontend-vue/dist/
+npm-debug.log*
+
+# Données PostgreSQL locales et fichiers téléversés — ne pas versionner ni supprimer.
+backend/data/
+backend-laravel/.env
+frontend-vue/*.log
+*.log
+
+# OS
+.DS_Store
