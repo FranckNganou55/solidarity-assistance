@@ -24,6 +24,8 @@ Object.assign(dictionaries.fr,{editBoardPosition:'Modifier la fonction',replaceB
 Object.assign(dictionaries.en,{editBoardPosition:'Edit position',replaceBoardMember:'Replace office holder'})
 Object.assign(dictionaries.fr,{credentialsEmailSent:'Le relais e-mail a accepté le message. Consultez le suivi transactionnel Brevo pour confirmer sa livraison.'})
 Object.assign(dictionaries.en,{credentialsEmailSent:'The email relay accepted the message. Check Brevo transactional logs to confirm delivery.'})
+Object.assign(dictionaries.fr,{installApp:'Installer l’application',pwaInstallIOSHelp:'Sur iPhone ou iPad, ouvrez le menu Partager de Safari puis choisissez « Sur l’écran d’accueil ».',pwaInstallBrowserHelp:'Dans le menu de votre navigateur, choisissez « Installer l’application » ou « Ajouter à l’écran d’accueil ». Le site doit être ouvert en HTTPS ou sur localhost.'})
+Object.assign(dictionaries.en,{installApp:'Install app',pwaInstallIOSHelp:'On iPhone or iPad, open Safari’s Share menu and choose “Add to Home Screen”.',pwaInstallBrowserHelp:'Open your browser menu and choose “Install app” or “Add to Home Screen”. The site must use HTTPS or localhost.'})
 export function useT() {
   const store = useAppStore()
   return (key, vars={}) => {

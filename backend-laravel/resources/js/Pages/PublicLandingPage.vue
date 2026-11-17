@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { api, assetUrl, DEFAULT_GROUP_LOGO, messageOf } from '../Services/api'
 import { useAppStore } from '../Store/index.js'
 import { useT } from '../Services/i18n'
+import PwaInstallButton from '../Components/ui/PwaInstallButton.vue'
 
 const app = useAppStore()
 const t = useT()
@@ -45,6 +46,7 @@ onMounted(async () => {
       </nav>
       <div class="public-tools">
         <button type="button" class="public-lang" @click="app.setLang(app.lang === 'fr' ? 'en' : 'fr')">{{ app.lang === 'fr' ? 'EN' : 'FR' }}</button>
+        <PwaInstallButton />
         <RouterLink class="public-login" to="/login">{{ t('signIn') }} <span aria-hidden="true">→</span></RouterLink>
       </div>
     </header>
