@@ -33,6 +33,7 @@ api.interceptors.response.use(r => r, error => {
 
 export const messageOf = error => {
   const status=error?.response?.status,lang=localStorage.getItem('ms.lang')||'fr'
+  if(error?.code==='ECONNABORTED'||/timeout/i.test(error?.message||''))return lang==='en'?'The server took too long to respond. Check whether the member was created before submitting again.':'Le serveur a mis trop de temps à répondre. Vérifiez si le membre a été créé avant de renvoyer le formulaire.'
   const messages={
     fr:{400:'La demande ne peut pas être traitée.',401:'Votre session a expiré. Reconnectez-vous.',403:'Vous n’avez pas les droits nécessaires.',404:'Élément introuvable.',409:'Cette action entre en conflit avec les données existantes.',422:'Vérifiez les champs renseignés.',500:'Une erreur interne est survenue.'},
     en:{400:'The request could not be processed.',401:'Your session expired. Please sign in again.',403:'You do not have permission to do this.',404:'The requested item was not found.',409:'This action conflicts with existing data.',422:'Please check the information you entered.',500:'An internal error occurred.'},

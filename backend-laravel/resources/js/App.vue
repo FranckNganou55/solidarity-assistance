@@ -4,10 +4,10 @@ import { useRoute, RouterView } from 'vue-router'
 import AdminLayout from './Layouts/AdminLayout.vue'
 
 const route = useRoute()
-const isLogin = computed(() => route.path === '/login')
+const isPublic = computed(() => Boolean(route.meta.public))
 </script>
 
 <template>
-  <RouterView v-if="isLogin" />
+  <RouterView v-if="isPublic" />
   <AdminLayout v-else />
 </template>

@@ -44,10 +44,22 @@ class GroupAccessService
             'active' => true,
         ])->first();
 
-        return (bool) ($membership && (($membership->is_principal_admin && $permission !== 'GROUP_CREATE') || DB::table('role_permissions')->where([
+        if (! $membership || $permission === 'GROUP_CREATE') {
+            return false;
+        }
+
+        if ($membership->permissions_override !== null) {
+            $overrides = is_array($membership->permissions_override)
+                ? $membership->permissions_override
+                : (json_decode((string) $membership->permissions_override, true) ?: []);
+
+            return in_array($permission, $overrides, true);
+        }
+
+        return DB::table('role_permissions')->where([
             'role_id' => $membership->role_id,
             'permission' => $permission,
-        ])->exists()));
+        ])->exists();
     }
 
     public function authorize(Request $request, string $permission): void

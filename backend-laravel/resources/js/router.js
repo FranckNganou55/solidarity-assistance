@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginPage from './Pages/Auth/LoginPage.vue'
+import PublicLandingPage from './Pages/PublicLandingPage.vue'
 import HomePage from './Pages/Dashboard/HomePage.vue'
 import MyStatisticsPage from './Pages/Dashboard/MyStatisticsPage.vue'
 import AssistancesPage from './Pages/Assistances/AssistancesPage.vue'
@@ -8,6 +9,7 @@ import EventDetailsPage from './Pages/Events/EventDetailsPage.vue'
 import ContributionsPage from './Pages/Contributions/ContributionsPage.vue'
 import RequestsPage from './Pages/Requests/RequestsPage.vue'
 import MembersPage from './Pages/Members/MembersPage.vue'
+import ArchivesPage from './Pages/Members/ArchivesPage.vue'
 import BoardMembersPage from './Pages/Administration/BoardMembersPage.vue'
 import AssistanceTypesPage from './Pages/Administration/AssistanceTypesPage.vue'
 import AuditLogPage from './Pages/Administration/AuditLogPage.vue'
@@ -19,8 +21,9 @@ import ProfilePage from './Pages/Profile/ProfilePage.vue'
 import { useAppStore } from './Store/index.js'
 
 const routes = [
+  { path: '/', name: 'landing', component: PublicLandingPage, meta: { public: true } },
   { path: '/login', name: 'login', component: LoginPage, meta: { public: true } },
-  { path: '/', name: 'home', component: HomePage, meta: { page: 'home' } },
+  { path: '/dashboard', name: 'home', component: HomePage, meta: { page: 'home' } },
   { path: '/myStats', name: 'myStats', component: MyStatisticsPage, meta: { page: 'myStats' } },
   { path: '/assistances', name: 'assistances', component: AssistancesPage, meta: { page: 'assistances' } },
   { path: '/events', name: 'events', component: EventsPage, meta: { page: 'events' } },
@@ -28,6 +31,7 @@ const routes = [
   { path: '/contributions', name: 'contributions', component: ContributionsPage, meta: { page: 'contributions' } },
   { path: '/requests', name: 'requests', component: RequestsPage, meta: { page: 'requests' } },
   { path: '/members', name: 'members', component: MembersPage, meta: { page: 'members' } },
+  { path: '/archives', name: 'archives', component: ArchivesPage, meta: { page: 'archives' } },
   { path: '/board', name: 'board', component: BoardMembersPage, meta: { page: 'board' } },
   { path: '/types', name: 'types', component: AssistanceTypesPage, meta: { page: 'types' } },
   { path: '/audit', name: 'audit', component: AuditLogPage, meta: { page: 'audit' } },
@@ -36,14 +40,14 @@ const routes = [
   { path: '/groups', name: 'groups', component: GroupsPage, meta: { page: 'groups' } },
   { path: '/settings', name: 'settings', component: SettingsPage, meta: { page: 'settings' } },
   { path: '/profile', name: 'profile', component: ProfilePage, meta: { page: 'profile' } },
-  { path: '/:pathMatch(.*)*', redirect: () => localStorage.getItem('ms.token') ? '/' : '/login' },
+  { path: '/:pathMatch(.*)*', redirect: () => localStorage.getItem('ms.token') ? '/dashboard' : '/' },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })
 router.beforeEach(to => {
   const store = useAppStore()
-  if (!to.meta.public && !store.token) return '/login'
-  if (to.path === '/login' && store.token) return store.member?.mustChangePassword ? '/profile?changePassword=1' : '/'
+  if (to.path === '/login' && store.token) return store.member?.mustChangePassword ? '/profile?changePassword=1' : '/dashboard'
+  if (!to.meta.public && !store.token) return { path: '/login', query: to.query.group ? { group: to.query.group } : {} }
   if (store.token && store.member?.mustChangePassword && to.path !== '/profile') return '/profile?changePassword=1'
 })
 

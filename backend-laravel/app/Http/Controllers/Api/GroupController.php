@@ -3,24 +3,35 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\AssociationGroupResource;
+use App\Mail\MemberAccessCredentials;
+use App\Services\PasswordHashService;
+use App\Services\SensitiveSettingsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Throwable;
 
 class GroupController
 {
+    public function __construct(
+        private readonly PasswordHashService $passwords,
+        private readonly SensitiveSettingsService $sensitiveSettings,
+    ) {}
+
     public function create(Request $r)
     {
         if (! $r->attributes->get('member')->super_admin) {
             abort(403);
         }
-        $d = $r->validate(['name' => 'required|string|max:120', 'logoUrl' => 'nullable|string|max:300', 'city' => 'nullable|string|max:80', 'description' => 'nullable|string|max:500', 'contactPhone' => 'nullable|string|max:30', 'contactEmail' => 'nullable|email|max:120', 'primaryColor' => 'nullable|string|max:20', 'accentColor' => 'nullable|string|max:20', 'currency' => 'nullable|string|max:20', 'minAssistancesRequired' => 'nullable|integer|min:0', 'admin.firstName' => 'required|string|max:80', 'admin.lastName' => 'required|string|max:80', 'admin.phone' => 'required|string|max:30', 'admin.quarter' => 'nullable|string|max:80', 'admin.email' => 'nullable|email|max:120', 'admin.password' => 'nullable|string|max:72']);
+        $d = $r->validate(['name' => 'required|string|max:120', 'logoUrl' => 'nullable|string|max:300', 'city' => 'nullable|string|max:80', 'description' => 'nullable|string|max:500', 'contactPhone' => 'nullable|string|max:30', 'contactEmail' => 'nullable|email|max:120', 'primaryColor' => 'nullable|string|max:20', 'accentColor' => 'nullable|string|max:20', 'currency' => 'nullable|string|max:20', 'minAssistancesRequired' => 'nullable|integer|min:0', 'admin.firstName' => 'required|string|max:80', 'admin.lastName' => 'required|string|max:80', 'admin.phone' => 'required|string|max:30', 'admin.quarter' => 'nullable|string|max:80', 'admin.email' => 'required|email|max:120', 'admin.password' => 'nullable|string|max:1024']);
         if (DB::table('members')->where('phone', $d['admin']['phone'])->exists()) {
             return response()->json(['code' => 'conflict', 'message' => 'Un membre utilise déjà cet identifiant'], 409);
         }
-        $configuredPassword = DB::table('app_settings')->where('setting_key', 'org.default.password')->value('setting_value');
+        $configuredPassword = $this->sensitiveSettings->defaultPassword();
         $temporaryPassword = empty($d['admin']['password']) ? ($configuredPassword ?: Str::random(14)) : null;
+        $credentialPassword = $d['admin']['password'] ?? $temporaryPassword;
         $result = DB::transaction(function () use ($d, $r, $temporaryPassword) {
             $g = DB::table('association_groups')->insertGetId(['name' => $d['name'], 'logo_url' => $d['logoUrl'] ?? null, 'city' => $d['city'] ?? null, 'description' => $d['description'] ?? null, 'contact_phone' => $d['contactPhone'] ?? null, 'contact_email' => $d['contactEmail'] ?? null, 'primary_color' => $d['primaryColor'] ?? '#1E6F5C', 'accent_color' => $d['accentColor'] ?? '#2D9CDB', 'currency' => $d['currency'] ?? 'FCFA', 'min_assistances_required' => $d['minAssistancesRequired'] ?? 2, 'min_contribution_amount' => 0, 'active' => true, 'created_by' => $r->attributes->get('memberId'), 'created_at' => now()]);
             $memberRole = DB::table('roles')->insertGetId(['group_id' => $g, 'code' => 'MEMBRE', 'name' => 'Membre', 'description' => 'Membre de l’association', 'system_role' => true, 'created_at' => now()]);
@@ -30,7 +41,7 @@ class GroupController
                 DB::table('role_permissions')->insert(['role_id' => $adminRole, 'permission' => $p]);
             }
             $admin = $d['admin'];
-            $mid = DB::table('members')->insertGetId(['last_name' => $admin['lastName'], 'first_name' => $admin['firstName'], 'phone' => $admin['phone'], 'city' => $d['city'] ?? 'Makenene', 'quarter' => $admin['quarter'] ?? null, 'email' => $admin['email'] ?? null, 'password_hash' => Hash::make($admin['password'] ?? $temporaryPassword), 'must_change_password' => true, 'active' => true, 'role_id' => $adminRole, 'cycle_contributions' => 0, 'total_contributions' => 0, 'photo_shape' => 'CIRCLE', 'created_at' => now(), 'updated_at' => now()]);
+            $mid = DB::table('members')->insertGetId(['last_name' => $admin['lastName'], 'first_name' => $admin['firstName'], 'phone' => $admin['phone'], 'city' => $d['city'] ?? 'Makenene', 'quarter' => $admin['quarter'] ?? null, 'email' => $admin['email'] ?? null, 'password_hash' => $this->passwords->make($admin['password'] ?? $temporaryPassword), 'must_change_password' => true, 'active' => true, 'role_id' => $adminRole, 'cycle_contributions' => 0, 'total_contributions' => 0, 'photo_shape' => 'CIRCLE', 'created_at' => now(), 'updated_at' => now()]);
             DB::table('group_members')->insert(['group_id' => $g, 'member_id' => $mid, 'role_id' => $adminRole, 'is_principal_admin' => true, 'active' => true, 'cycle_contributions' => 0, 'total_contributions' => 0, 'joined_at' => now()]);
             $superAdmin = $r->attributes->get('member');
             DB::table('group_members')->insert(['group_id' => $g, 'member_id' => $superAdmin->id, 'role_id' => $memberRole, 'is_principal_admin' => false, 'active' => (bool) $superAdmin->active, 'cycle_contributions' => 0, 'total_contributions' => 0, 'joined_at' => now()]);
@@ -40,7 +51,40 @@ class GroupController
             return DB::table('association_groups')->where('id', $g)->first();
         });
 
-        return response()->json($this->view($result) + ($temporaryPassword ? ['temporaryPassword' => $temporaryPassword] : []), 201);
+        $credentialsEmailSent = false;
+        $emailFailureReason = null;
+        $adminEmail = trim((string) $d['admin']['email']);
+        if (in_array(config('mail.default'), ['log', 'array'], true)) {
+            $emailFailureReason = 'Le transport e-mail n’est pas configuré pour un envoi réel.';
+        } elseif ($adminEmail !== '') {
+            try {
+                Mail::to($adminEmail)->send(new MemberAccessCredentials(
+                    trim($d['admin']['firstName'].' '.$d['admin']['lastName']),
+                    $result->name,
+                    $d['admin']['phone'],
+                    (string) $credentialPassword,
+                    rtrim((string) config('app.url'), '/').'/login?group='.$result->id,
+                ));
+                $credentialsEmailSent = true;
+                Log::info('Principal administrator credential email accepted by the SMTP transport.', ['group_id' => $result->id]);
+            } catch (Throwable $exception) {
+                $emailFailureReason = $this->safeMailFailureReason($exception);
+                Log::warning('Could not send new principal administrator credentials.', [
+                    'group_id' => $result->id,
+                    'exception' => $exception::class,
+                    'reason' => $this->safeMailFailureReason($exception),
+                ]);
+            }
+        }
+        $response = $this->view($result) + ['credentialsEmailSent' => $credentialsEmailSent];
+        if (! $credentialsEmailSent) {
+            $response['temporaryPassword'] = $credentialPassword;
+            if ($emailFailureReason !== null) {
+                $response['credentialsEmailError'] = $emailFailureReason;
+            }
+        }
+
+        return response()->json($response, 201);
     }
 
     public function update(Request $r, int $id)
@@ -69,16 +113,42 @@ class GroupController
         if (! $r->attributes->get('member')->super_admin) {
             abort(403);
         }
+        $group = DB::table('association_groups')->where('id', $id)->first();
+        abort_unless($group, 404, 'Groupe introuvable');
         $active = DB::table('association_groups')->where('active', true)->count();
         if ($active <= 1) {
             abort(409, 'Au moins un groupe actif doit être conservé');
         }
         DB::transaction(function () use ($id) {
-            DB::table('association_groups')->where('id', $id)->update(['active' => false]);
-            DB::table('group_members')->where('group_id', $id)->update(['active' => false]);
+            $roleIds = DB::table('roles')->where('group_id', $id)->pluck('id');
+            $eventIds = DB::table('events')->where('group_id', $id)->pluck('id');
+
+            // Preserve globally shared member accounts by moving their legacy role
+            // reference to a role in another group before deleting this group's roles.
+            $fallbackGroupId = DB::table('association_groups')->where('id', '<>', $id)->where('active', true)->orderBy('id')->value('id');
+            $fallbackRoleId = DB::table('roles')->where('group_id', $fallbackGroupId)->where('code', 'MEMBRE')->value('id')
+                ?? DB::table('roles')->where('group_id', $fallbackGroupId)->orderBy('id')->value('id');
+            if (! $fallbackRoleId && $roleIds->isNotEmpty() && DB::table('members')->whereIn('role_id', $roleIds)->exists()) {
+                abort(409, 'Impossible de supprimer ce groupe tant qu’aucun autre groupe ne possède un rôle de membre.');
+            }
+            if ($fallbackRoleId && $roleIds->isNotEmpty()) {
+                DB::table('members')->whereIn('role_id', $roleIds)->update(['role_id' => $fallbackRoleId]);
+            }
+
+            DB::table('app_notifications')->where('group_id', $id)->delete();
+            DB::table('audit_logs')->where('group_id', $id)->delete();
+            DB::table('assistance_requests')->where('group_id', $id)->delete();
+            if ($eventIds->isNotEmpty()) {
+                DB::table('contributions')->whereIn('event_id', $eventIds)->delete();
+                DB::table('events')->whereIn('id', $eventIds)->delete();
+            }
+            DB::table('assistance_types')->where('group_id', $id)->delete();
+            DB::table('group_members')->where('group_id', $id)->delete();
+            DB::table('roles')->where('group_id', $id)->delete();
+            DB::table('association_groups')->where('id', $id)->delete();
         });
 
-        return response()->noContent();
+        return response()->json(['message' => 'Groupe et données associées supprimés définitivement']);
     }
 
     public function addMember(Request $r, int $groupId)
@@ -100,5 +170,13 @@ class GroupController
     private function view(object $g): array
     {
         return AssociationGroupResource::make(['id' => (int) $g->id, 'name' => $g->name, 'logoUrl' => $g->logo_url, 'city' => $g->city, 'description' => $g->description, 'contactPhone' => $g->contact_phone, 'contactEmail' => $g->contact_email, 'primaryColor' => $g->primary_color, 'accentColor' => $g->accent_color, 'currency' => $g->currency, 'minAssistancesRequired' => (int) $g->min_assistances_required, 'principalAdmin' => false])->resolve();
+    }
+
+    private function safeMailFailureReason(Throwable $exception): string
+    {
+        $reason = preg_replace('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i', '[email]', $exception->getMessage()) ?? 'Mail transport failed';
+        $reason = preg_replace('/(password|pass|token|secret|authorization)\s*[:=]\s*[^\s,;]+/i', '$1=[redacted]', $reason) ?? $reason;
+
+        return Str::limit($reason, 350);
     }
 }

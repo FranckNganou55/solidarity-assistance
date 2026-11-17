@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('public')->group(function () {
     Route::get('/groups', [AdminController::class, 'publicGroups']);
     Route::get('/settings', [AdminController::class, 'publicSettings']);
-    Route::post('/register', [AuthController::class, 'register']);
 });
 Route::post('/auth/login', [AuthController::class, 'login']);
 
@@ -32,6 +31,7 @@ Route::middleware('api.auth')->group(function () {
     Route::post('/members', [AdminController::class, 'createMember']);
     Route::put('/members/{id}', [AdminController::class, 'updateMember']);
     Route::put('/members/{id}/role', [AdminController::class, 'assignRole']);
+    Route::put('/members/{id}/permissions', [AdminController::class, 'updateMemberPermissions']);
     Route::put('/members/{id}/status', [AdminController::class, 'memberStatus']);
     Route::delete('/members/{id}', [AdminController::class, 'deleteMember']);
     Route::post('/members/{id}/reset-password', [AdminController::class, 'resetPassword']);
@@ -50,6 +50,7 @@ Route::middleware('api.auth')->group(function () {
     Route::get('/administration/bureau', [AdminController::class, 'bureau']);
     Route::post('/administration/bureau', [AdminController::class, 'appointBureau']);
     Route::put('/administration/bureau/replace', [AdminController::class, 'replaceBureau']);
+    Route::put('/administration/bureau/{memberId}', [AdminController::class, 'updateBureauPosition']);
     Route::delete('/administration/bureau/{memberId}', [AdminController::class, 'removeBureau']);
     Route::get('/settings', [AdminController::class, 'settings']);
     Route::get('/settings/permission-groups', [AdminController::class, 'permissionGroups']);
@@ -84,5 +85,6 @@ Route::middleware('api.auth')->group(function () {
     Route::post('/requests/{id}/reject', [SolidarityController::class, 'rejectRequest']);
     Route::post('/uploads', [UploadController::class, 'image']);
     Route::post('/uploads/document', [UploadController::class, 'document']);
+    Route::get('/files/{filename}', [UploadController::class, 'privateFile'])->where('filename', '[A-Za-z0-9_.-]+');
     Route::post('/settings/logo', [UploadController::class, 'logo']);
 });

@@ -13,8 +13,8 @@ const langMenu=ref(false),themeMenu=ref(false),notifOpen=ref(false),notification
 let notificationTimer=null, soundContext=null, previousUnread=null
 const activeGroup=computed(()=>app.groups.find(g=>g.id===app.activeGroupId))
 const items=computed(()=>[
-  {section:'overview',links:[['home','⌂','/'],['myStats','▥','/myStats'],['assistances','♡','/assistances','EVENT_VIEW'],['events','▣','/events','EVENT_VIEW'],['contributions','↗','/contributions','CONTRIBUTION_VIEW'],['requests','▤','/requests','REQUEST_CREATE']]},
-  {section:'management',links:[['members','♙','/members','MEMBER_VIEW'],['types','◇','/types','ASSISTANCE_TYPE_VIEW'],['audit','◷','/audit','AUDIT_VIEW']]},
+  {section:'overview',links:[['home','⌂','/dashboard'],['myStats','▥','/myStats'],['assistances','♡','/assistances','EVENT_VIEW'],['events','▣','/events','EVENT_VIEW'],['contributions','↗','/contributions','CONTRIBUTION_VIEW'],['requests','▤','/requests','REQUEST_CREATE']]},
+  {section:'management',links:[['members','♙','/members','MEMBER_VIEW'],['archives','▣','/archives','MEMBER_VIEW'],['types','◇','/types','ASSISTANCE_TYPE_VIEW'],['audit','◷','/audit','AUDIT_VIEW']]},
   {section:'administration',links:[['board','♙','/board','MEMBER_EDIT'],['roles','♧','/roles','ROLE_VIEW'],['assignments','⇄','/assignments','ROLE_ASSIGN'],...(app.member?.superAdmin?[['groups','▦','/groups']]:[])]}
 ].map(section=>({...section,links:section.links.filter(link=>!link[3]||app.can(link[3]))})).filter(s=>s.links.length))
 const pageTitle=computed(()=>t(route.meta.page||'home'))
@@ -22,12 +22,13 @@ async function openNotifications(){notifOpen.value=!notifOpen.value;if(notifOpen
 async function unlockAudio(){try{const AudioContextClass=window.AudioContext||window.webkitAudioContext;if(AudioContextClass){soundContext??=new AudioContextClass();if(soundContext.state==='suspended')await soundContext.resume()}}catch{}}
 function playNotificationSound(){if(!soundContext||soundContext.state!=='running')return;try{const osc=soundContext.createOscillator(),gain=soundContext.createGain();osc.type='sine';osc.frequency.value=880;gain.gain.setValueAtTime(.0001,soundContext.currentTime);gain.gain.exponentialRampToValueAtTime(.12,soundContext.currentTime+.02);gain.gain.exponentialRampToValueAtTime(.0001,soundContext.currentTime+.28);osc.connect(gain);gain.connect(soundContext.destination);osc.start();osc.stop(soundContext.currentTime+.3)}catch{}}
 async function refreshNotifications(){try{const {data}=await api.get('/notifications');notifications.value=data.notifications||[];unread.value=data.unreadCount||0}catch{}}
+async function refreshMemberContext(){try{const {data}=await api.get('/auth/me');app.member=data;localStorage.setItem('ms.member',JSON.stringify(data))}catch{}}
 function notificationText(n,part){const keys={CONTRIBUTION_SUBMITTED:part==='title'?'notifContributionSubmittedTitle':'notifContributionSubmittedMessage',CONTRIBUTION_VALIDATED:part==='title'?'notifContributionValidatedTitle':'notifContributionValidatedMessage',CONTRIBUTION_INVALIDATED:part==='title'?'notifContributionInvalidatedTitle':'notifContributionInvalidatedMessage'};const key=keys[n.type];return key?t(key):(part==='title'?n.title:n.message)}
 async function markAll(){await api.post('/notifications/read-all');await refreshNotifications()}
 async function selectGroup(e){const id=Number(e.target.value);try{loading.value=true;await app.setGroup(id);await refreshNotifications()}catch(err){app.notify(messageOf(err),'error')}finally{loading.value=false}}
-async function logout(){await app.logout();router.replace('/login')}
+async function logout(){await app.logout();router.replace('/')}
 function toggleLang(){app.setLang(app.lang==='fr'?'en':'fr')}
-onMounted(async()=>{document.documentElement.dataset.theme=app.theme;document.documentElement.lang=app.lang;document.addEventListener('pointerdown',unlockAudio,{once:true});if(app.token){try{loading.value=true;await app.refreshGroups();await refreshNotifications();previousUnread=unread.value;notificationTimer=window.setInterval(async()=>{await refreshNotifications();if(previousUnread!==null&&unread.value>previousUnread)playNotificationSound();previousUnread=unread.value},30000)}catch(err){app.notify(messageOf(err),'error')}finally{loading.value=false}}})
+onMounted(async()=>{document.documentElement.dataset.theme=app.theme;document.documentElement.lang=app.lang;document.addEventListener('pointerdown',unlockAudio,{once:true});if(app.token){try{loading.value=true;await app.refreshGroups();await refreshNotifications();previousUnread=unread.value;notificationTimer=window.setInterval(async()=>{if(document.visibilityState!=='visible')return;await Promise.all([refreshNotifications(),refreshMemberContext()]);if(previousUnread!==null&&unread.value>previousUnread)playNotificationSound();previousUnread=unread.value},5000)}catch(err){app.notify(messageOf(err),'error')}finally{loading.value=false}}})
 onUnmounted(()=>{document.removeEventListener('pointerdown',unlockAudio);if(notificationTimer)window.clearInterval(notificationTimer);if(soundContext)soundContext.close()})
 watch(()=>app.lang,()=>{document.documentElement.lang=app.lang;refreshNotifications()})
 watch(()=>app.theme,value=>document.documentElement.dataset.theme=value)

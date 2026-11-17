@@ -1,7 +1,7 @@
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { messageOf } from '../../Services/api'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { api, assetUrl, DEFAULT_GROUP_LOGO, messageOf } from '../../Services/api'
 import { useAppStore } from '../../Store/index.js'
 import { useT } from '../../Services/i18n'
 import AuthLayout from '../../Layouts/AuthLayout.vue'
@@ -12,27 +12,49 @@ import ActionButton from '../../Components/ui/ActionButton.vue'
 const app = useAppStore()
 const auth = useAuth()
 const router = useRouter()
+const route = useRoute()
 const t = useT()
 const identifier = ref('')
 const password = ref('')
 const busy = ref(false)
 const error = ref('')
 const showPassword = ref(false)
-const groupLogo = '/logo-fm-mak.jpeg'
+const groups = ref([])
+const groupId = ref(String(route.query.group || ''))
+const selectedGroup = computed(() => groups.value.find(group => String(group.id) === String(groupId.value)))
+const groupLogo = computed(() => assetUrl(selectedGroup.value?.logoUrl) || DEFAULT_GROUP_LOGO)
+
+onMounted(async () => {
+    try {
+        const { data } = await api.get('/public/groups')
+        groups.value = data
+        if (!groups.value.some(group => String(group.id) === String(groupId.value))) {
+            groupId.value = ''
+        }
+    } catch (exception) {
+        error.value = exception?.response?.data?.code === 'account_not_in_group' ? t('accountNotInGroup') : messageOf(exception)
+    }
+})
+
+watch(() => route.query.group, value => { groupId.value = String(value || '') })
 
 async function login() {
     error.value = ''
     busy.value = true
 
     try {
-        const result = await auth.login(identifier.value, password.value)
+        if (!groupId.value) {
+            error.value = t('selectGroupFirst')
+            return
+        }
+        const result = await auth.login(identifier.value, password.value, Number(groupId.value))
 
         if (result.mustChangePassword) {
             await router.push('/profile?changePassword=1')
             return
         }
 
-        await router.replace('/')
+        await router.replace('/dashboard')
     } catch (exception) {
         error.value = messageOf(exception)
     } finally {
@@ -65,8 +87,8 @@ function toggleTheme() {
             <div class="login-layout">
                 <section class="login-story" aria-labelledby="login-story-title">
                     <div class="login-story-brand">
-                        <span class="login-logo-frame"><img :src="groupLogo" alt="Logo Makénéné Solidarité"></span>
-                        <span>{{ t('workspace') }}</span>
+                        <span class="login-logo-frame"><img :src="groupLogo" :alt="`Logo ${selectedGroup?.name || 'Makénéné Solidarité'}`"></span>
+                        <span>{{ selectedGroup?.name || t('workspace') }}</span>
                     </div>
                     <p class="login-story-eyebrow">{{ t('welcome') }}</p>
                     <h1 id="login-story-title">{{ t('loginHeadline') }}</h1>
@@ -83,7 +105,7 @@ function toggleTheme() {
                     <div class="login-card-brand">
                         <img :src="groupLogo" alt="">
                         <div>
-                            <strong>Makénéné Solidarité</strong>
+                            <strong>{{ selectedGroup?.name || 'Makénéné Solidarité' }}</strong>
                             <small>{{ t('slogan') }}</small>
                         </div>
                     </div>
@@ -92,6 +114,13 @@ function toggleTheme() {
                     <p class="login-hint">{{ t('loginHint') }}</p>
 
                     <form class="login-form" @submit.prevent="login">
+                        <FormField>
+                            <span>{{ t('group') }}</span>
+                            <select v-model="groupId" required name="groupId">
+                                <option value="" disabled>{{ t('chooseGroup') }}</option>
+                                <option v-for="group in groups" :key="group.id" :value="String(group.id)">{{ group.name }}</option>
+                            </select>
+                        </FormField>
                         <FormField>
                             <span>{{ t('identifier') }}</span>
                             <input

@@ -3,64 +3,61 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Requests\LoginRequest;
-use App\Http\Requests\RegisterRequest;
 use App\Models\ApiToken;
 use App\Models\AssociationGroup;
-use App\Models\GroupMembership;
 use App\Models\Member;
+use App\Services\PasswordHashService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password;
 
 class AuthController
 {
-    public function register(RegisterRequest $request)
-    {
-        $d = $request->validated();
-        if (Member::query()->where('phone', $d['phone'])->exists()) {
-            return response()->json(['code' => 'conflict', 'message' => 'Cet identifiant est déjà utilisé'], 409);
-        }
-        $g = $d['groupId'] ?? DB::table('association_groups')->where('active', true)->orderBy('id')->value('id');
-        if (! $g) {
-            abort(400, 'Aucun groupe disponible');
-        }$role = DB::table('roles')->where(['group_id' => $g, 'code' => 'MEMBRE'])->first();
-        if (! $role) {
-            abort(400, 'Groupe non configuré');
-        }
-        DB::transaction(function () use ($d, $g, $role) {
-            $member = Member::query()->create(['first_name' => $d['firstName'], 'last_name' => $d['lastName'], 'phone' => $d['phone'], 'city' => $d['city'], 'quarter' => $d['quarter'], 'email' => $d['email'] ?? null, 'password_hash' => Hash::make($d['password']), 'must_change_password' => false, 'active' => true, 'role_id' => $role->id, 'photo_shape' => 'CIRCLE', 'cycle_contributions' => 0, 'total_contributions' => 0]);
-            GroupMembership::query()->create(['group_id' => $g, 'member_id' => $member->id, 'role_id' => $role->id, 'is_principal_admin' => false, 'active' => true, 'cycle_contributions' => 0, 'total_contributions' => 0, 'joined_at' => now()]);
-        });
-
-        return response()->json(['message' => 'Inscription enregistrée'], 201);
-    }
+    public function __construct(private readonly PasswordHashService $passwords) {}
 
     public function login(LoginRequest $request)
     {
         $data = $request->validated();
+        $rateLimitKey = 'auth-login:'.hash('sha256', mb_strtolower(trim($data['phone'])).'|'.$request->ip());
+        if (RateLimiter::tooManyAttempts($rateLimitKey, 6)) {
+            return response()->json(['code' => 'too_many_attempts', 'message' => 'Trop de tentatives. Réessayez dans 15 minutes.'], 429)
+                ->header('Retry-After', (string) RateLimiter::availableIn($rateLimitKey));
+        }
+
         $member = Member::query()->where('phone', trim($data['phone']))->first();
-        if (! $member) {
+        $storedPasswordHash = (string) ($member?->password_hash ?? '');
+        if (! $member || ! $this->passwords->check($data['password'], $storedPasswordHash)) {
+            RateLimiter::hit($rateLimitKey, 900);
+
             return response()->json(['code' => 'unauthorized', 'message' => 'Identifiant ou mot de passe incorrect'], 401);
         }
-        $storedPasswordHash = (string) $member->password_hash;
-        $isLegacySpringBcrypt = str_starts_with($storedPasswordHash, '$2a$');
-        $passwordMatches = $isLegacySpringBcrypt
-            ? password_verify($data['password'], $storedPasswordHash)
-            : Hash::check($data['password'], $storedPasswordHash);
-        if (! $passwordMatches) {
-            return response()->json(['code' => 'unauthorized', 'message' => 'Identifiant ou mot de passe incorrect'], 401);
-        }
-        if ($isLegacySpringBcrypt || Hash::needsRehash($storedPasswordHash)) {
-            $member->forceFill(['password_hash' => Hash::make($data['password'])])->save();
+        RateLimiter::clear($rateLimitKey);
+        if ($this->passwords->needsRehash($storedPasswordHash)) {
+            $member->forceFill(['password_hash' => $this->passwords->make($data['password'])])->save();
         }
         if (! $member->active) {
             return response()->json(['code' => 'forbidden', 'message' => 'Compte archivé'], 403);
         }
-        $group = DB::table('group_members')->where('member_id', $member->id)->where('active', true)->orderByDesc('is_principal_admin')->orderBy('group_id')->first();
-        if (! $member->super_admin && ! $group) {
-            return response()->json(['code' => 'forbidden', 'message' => 'Aucun groupe actif n’est associé à ce compte'], 403);
+        $memberships = DB::table('group_members as gm')
+            ->join('association_groups as ag', 'ag.id', '=', 'gm.group_id')
+            ->where(['gm.member_id' => $member->id, 'gm.active' => true, 'ag.active' => true]);
+        $requestedGroupId = isset($data['groupId']) ? (int) $data['groupId'] : null;
+        if ($requestedGroupId) {
+            $memberships->where('gm.group_id', $requestedGroupId);
+        } else {
+            $memberships->orderByDesc('gm.is_principal_admin')->orderBy('gm.group_id');
+        }
+        $group = $memberships->select('gm.group_id')->first();
+        if (! $group) {
+            return response()->json([
+                'code' => $requestedGroupId ? 'account_not_in_group' : 'no_active_group',
+                'message' => $requestedGroupId
+                    ? 'Ce compte n’appartient pas à ce groupe actif.'
+                    : 'Aucun groupe actif n’est associé à ce compte.',
+            ], 403);
         }
         $plain = Str::random(72);
         ApiToken::query()->create(['member_id' => $member->id, 'token_hash' => hash('sha256', $plain), 'expires_at' => now()->addHours(12), 'created_at' => now()]);
@@ -110,13 +107,16 @@ class AuthController
 
     public function changePassword(Request $request)
     {
-        $data = $request->validate(['currentPassword' => ['required', 'string'], 'newPassword' => ['required', 'string', 'min:8', 'regex:/[A-Za-z]/', 'regex:/\d/']]);
+        $data = $request->validate([
+            'currentPassword' => ['required', 'string', 'max:1024'],
+            'newPassword' => ['required', 'string', 'confirmed', Password::min(12)->max(1024)->uncompromised()],
+        ]);
         $id = $request->attributes->get('memberId');
         $member = Member::query()->findOrFail($id);
-        if (! Hash::check($data['currentPassword'], $member->password_hash)) {
+        if (! $this->passwords->check($data['currentPassword'], $member->password_hash)) {
             return response()->json(['code' => 'bad_request', 'message' => 'Le mot de passe actuel est incorrect'], 400);
         }
-        $member->forceFill(['password_hash' => Hash::make($data['newPassword']), 'must_change_password' => false, 'updated_at' => now()])->save();
+        $member->forceFill(['password_hash' => $this->passwords->make($data['newPassword']), 'must_change_password' => false, 'updated_at' => now()])->save();
 
         return response()->json(['message' => 'Mot de passe modifié']);
     }
@@ -169,12 +169,18 @@ class AuthController
         $role = $gm ? null : DB::table('roles')->where('id', $m->role_id)->first();
         $required = $gm?->required_assistances_override ?? $m->required_assistances_override ?? ($groupId ? DB::table('association_groups')->where('id', $groupId)->value('min_assistances_required') : 0);
         $cycle = (int) ($gm?->cycle_contributions ?? $m->cycle_contributions);
-        $perms = ($m->super_admin || $gm?->is_principal_admin) ? DB::table('role_permissions')->pluck('permission')->unique()->values()->all() : DB::table('role_permissions')->where('role_id', $gm?->role_id ?? $m->role_id)->pluck('permission')->all();
+        if ($m->super_admin) {
+            $perms = DB::table('role_permissions')->pluck('permission')->unique()->values()->all();
+        } elseif ($gm?->permissions_override !== null) {
+            $perms = is_array($gm->permissions_override) ? $gm->permissions_override : (json_decode((string) $gm->permissions_override, true) ?: []);
+        } else {
+            $perms = DB::table('role_permissions')->where('role_id', $gm?->role_id ?? $m->role_id)->pluck('permission')->all();
+        }
         if ($m->super_admin) {
             $perms[] = 'GROUP_CREATE';
         }
 
-        return ['id' => (int) $m->id, 'lastName' => $m->last_name, 'firstName' => $m->first_name, 'fullName' => trim($m->first_name.' '.$m->last_name), 'phone' => $m->phone, 'city' => $m->city, 'quarter' => $m->quarter, 'photoUrl' => $m->photo_url, 'email' => $m->email, 'active' => (bool) ($gm?->active ?? $m->active), 'roleId' => (int) ($gm?->role_id ?? $m->role_id), 'roleCode' => $gm?->role_code ?? $role?->code, 'roleName' => $gm?->role_name ?? $role?->name, 'superAdmin' => (bool) $m->super_admin, 'groupAdmin' => (bool) ($gm?->is_principal_admin ?? false), 'mustChangePassword' => (bool) $m->must_change_password, 'cycleContributions' => $cycle, 'totalContributions' => (int) ($gm?->total_contributions ?? $m->total_contributions), 'requiredAssistances' => (int) $required, 'requiredAssistancesOverride' => $gm?->required_assistances_override, 'bureauPosition' => $gm?->bureau_position ?? $m->bureau_position, 'eligibleForAssistance' => $cycle >= (int) $required, 'createdAt' => $m->created_at, 'lastLoginAt' => $m->last_login_at, 'permissions' => array_values(array_unique($perms)), 'photoShape' => $m->photo_shape ?? 'CIRCLE'];
+        return ['id' => (int) $m->id, 'groupId' => $groupId ? (int) $groupId : null, 'lastName' => $m->last_name, 'firstName' => $m->first_name, 'fullName' => trim($m->first_name.' '.$m->last_name), 'phone' => $m->phone, 'city' => $m->city, 'quarter' => $m->quarter, 'photoUrl' => $m->photo_url, 'email' => $m->email, 'active' => (bool) ($gm?->active ?? $m->active), 'roleId' => (int) ($gm?->role_id ?? $m->role_id), 'roleCode' => $gm?->role_code ?? $role?->code, 'roleName' => $gm?->role_name ?? $role?->name, 'superAdmin' => (bool) $m->super_admin, 'groupAdmin' => (bool) ($gm?->is_principal_admin ?? false), 'mustChangePassword' => (bool) $m->must_change_password, 'cycleContributions' => $cycle, 'totalContributions' => (int) ($gm?->total_contributions ?? $m->total_contributions), 'requiredAssistances' => (int) $required, 'requiredAssistancesOverride' => $gm?->required_assistances_override, 'bureauPosition' => $gm?->bureau_position ?? $m->bureau_position, 'eligibleForAssistance' => $cycle >= (int) $required, 'createdAt' => $m->created_at, 'lastLoginAt' => $m->last_login_at, 'permissions' => array_values(array_unique($perms)), 'photoShape' => $m->photo_shape ?? 'CIRCLE'];
     }
 
     private function groupView(object $g, int $memberId): array

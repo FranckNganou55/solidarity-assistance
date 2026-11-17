@@ -28,10 +28,10 @@ class StoreMemberRequest extends FormRequest
             'phone' => ['required', 'string', 'max:30'],
             'city' => ['required', 'string', 'max:80'],
             'quarter' => ['nullable', 'string', 'max:80'],
-            'email' => ['nullable', 'email', 'max:120'],
+            'email' => ['required', 'email', 'max:120'],
             'photoUrl' => ['nullable', 'string', 'max:300'],
             'photoShape' => ['nullable', 'in:CIRCLE,SQUARE'],
-            'password' => ['nullable', 'string', 'max:72'],
+            'password' => ['nullable', 'string', 'max:1024'],
             'requiredAssistancesOverride' => ['nullable', 'integer', 'min:0'],
         ];
     }

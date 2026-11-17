@@ -24,7 +24,8 @@ class LoginRequest extends FormRequest
     {
         return [
             'phone' => ['required', 'string', 'max:30'],
-            'password' => ['required', 'string'],
+            'password' => ['required', 'string', 'max:1024'],
+            'groupId' => ['nullable', 'integer', 'min:1'],
         ];
     }
 }

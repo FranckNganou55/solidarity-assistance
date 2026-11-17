@@ -12,7 +12,10 @@ class ExampleTest extends TestCase
      */
     public function test_browser_routes_load_the_vue_application_through_laravel(): void
     {
-        $this->get('/')->assertRedirect('/login');
+        $this->get('/')
+            ->assertOk()
+            ->assertViewIs('app')
+            ->assertSee('<div id="app"></div>', false);
 
         $this->get('/login')
             ->assertOk()

@@ -2,16 +2,19 @@
 
 namespace App\Services;
 
-use App\Models\AppSetting;
 use App\Models\GroupMembership;
 use App\Models\Member;
 use App\Models\Role;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class MemberManagementService
 {
+    public function __construct(
+        private readonly PasswordHashService $passwords,
+        private readonly SensitiveSettingsService $sensitiveSettings,
+    ) {}
+
     /**
      * @return array{member: Member, temporaryPassword: string}
      */
@@ -24,7 +27,7 @@ class MemberManagementService
                 abort(409, 'Le groupe ne possède aucun rôle membre');
             }
 
-            $defaultPassword = AppSetting::query()->where('setting_key', 'org.default.password')->value('setting_value');
+            $defaultPassword = $this->sensitiveSettings->defaultPassword();
             $temporaryPassword = filled($data['password'] ?? null)
                 ? $data['password']
                 : ($defaultPassword ?: Str::random(14));
@@ -38,7 +41,7 @@ class MemberManagementService
                 'photo_url' => $data['photoUrl'] ?? null,
                 'photo_shape' => $data['photoShape'] ?? 'CIRCLE',
                 'email' => $data['email'] ?? null,
-                'password_hash' => Hash::make($temporaryPassword),
+                'password_hash' => $this->passwords->make($temporaryPassword),
                 'must_change_password' => true,
                 'active' => true,
                 'role_id' => $role->id,

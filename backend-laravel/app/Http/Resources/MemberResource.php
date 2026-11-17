@@ -25,6 +25,7 @@ class MemberResource extends JsonResource
             'photoUrl' => $this->resource['photoUrl'],
             'email' => $this->resource['email'],
             'active' => (bool) $this->resource['active'],
+            'status' => $this->resource['status'] ?? ($this->resource['active'] ? 'ACTIVE' : 'INACTIVE'),
             'roleId' => (int) $this->resource['roleId'],
             'roleCode' => $this->resource['roleCode'],
             'roleName' => $this->resource['roleName'],

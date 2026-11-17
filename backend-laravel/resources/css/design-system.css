@@ -46,12 +46,247 @@
     --warning: #f0ad70;
     --danger: #ee8990;
     --text: #e5eee9;
-    --muted: #a3b4ab;
+    --muted: #b7c6be;
     --line: #34483e;
     --background: #14211b;
     --card-bg: #1c2c24;
     --shadow: 0 8px 24px rgb(0 0 0 / 18%);
     --shadow-raised: 0 14px 34px rgb(0 0 0 / 28%);
+}
+
+/* Upload controls and high-contrast text for every form, including dark mode. */
+.file-field {
+    display: grid;
+    min-width: 0;
+    gap: 8px;
+    margin: 12px 0;
+}
+
+.file-field__label {
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.file-picker {
+    position: relative;
+    display: flex;
+    min-height: 76px;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1px dashed color-mix(in srgb, var(--primary) 42%, var(--line));
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--primary-soft) 55%, var(--card-bg));
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color var(--motion-fast) var(--ease-standard),
+        background-color var(--motion-fast) var(--ease-standard),
+        box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.modal-card .file-picker,
+.form-card .file-picker {
+    flex-direction: row;
+    gap: 14px;
+    margin: 0;
+    font-size: initial;
+    font-weight: initial;
+}
+
+.file-picker:hover,
+.file-picker--selected {
+    border-color: var(--primary);
+    background: color-mix(in srgb, var(--primary-soft) 76%, var(--card-bg));
+}
+
+.file-picker:focus-within {
+    outline: 3px solid color-mix(in srgb, var(--secondary) 45%, transparent);
+    outline-offset: 2px;
+}
+
+.file-picker__input {
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: inherit;
+    background: transparent !important;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.modal-card .file-picker__input,
+.form-card .file-picker__input {
+    width: 100%;
+    height: 100%;
+}
+
+.file-picker__icon,
+.file-picker__action {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    color: var(--primary);
+}
+
+.file-picker__icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: var(--primary-soft);
+}
+
+.file-picker__icon svg { width: 22px; height: 22px; }
+
+.file-picker__copy {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+    gap: 4px;
+}
+
+.file-picker__copy strong {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-picker__copy small {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 400;
+}
+
+.file-picker__action {
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card-bg);
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.profile-photo-actions .file-field {
+    min-width: min(100%, 280px);
+    flex: 1;
+    margin: 0;
+}
+
+.profile-photo-actions .file-field__label { display: none; }
+
+.modal-backdrop {
+    background: rgb(12 20 16 / 40%);
+}
+
+:root[data-theme='dark'] .form-card label,
+:root[data-theme='dark'] .modal-card label,
+:root[data-theme='dark'] .password-change label,
+:root[data-theme='dark'] .file-field__label {
+    color: var(--text);
+}
+
+:root[data-theme='dark'] .nav-link {
+    color: #e5eee9;
+}
+
+:root[data-theme='dark'] .nav-link > span {
+    color: #b7c6be;
+}
+
+:root[data-theme='dark'] .nav-link:hover {
+    background: #24382d;
+    color: var(--text);
+}
+
+:root[data-theme='dark'] .nav-link.router-link-active {
+    background: #1d3b31;
+    color: var(--primary-strong);
+}
+
+:root[data-theme='dark'] .nav-link.router-link-active > span {
+    color: var(--primary-strong);
+}
+
+:root[data-theme='dark'] .icon-button,
+:root[data-theme='dark'] .filter-tabs button {
+    border-color: var(--line);
+    background: var(--card-bg);
+    color: var(--text);
+}
+
+:root[data-theme='dark'] .small-danger {
+    border-color: #83484d;
+    background: #49272b;
+    color: #ffc0c4;
+}
+
+:root[data-theme='dark'] .error-banner {
+    border-color: #83484d;
+    background: #49272b;
+    color: #ffc0c4;
+}
+
+:root[data-theme='dark'] .request-card > p,
+:root[data-theme='dark'] .event-summary p,
+:root[data-theme='dark'] .form-hint,
+:root[data-theme='dark'] .table-head,
+:root[data-theme='dark'] .member-cell small,
+:root[data-theme='dark'] .row-main small,
+:root[data-theme='dark'] .file-picker__copy small {
+    color: var(--muted);
+}
+
+:root[data-theme='dark'] .permission-chip {
+    background: #26392f;
+    color: #d3e0d8;
+}
+
+:root[data-theme='dark'] .status-badge.validated,
+:root[data-theme='dark'] .status-badge.active {
+    background: #173d2d;
+    color: #a6e8bd;
+}
+
+:root[data-theme='dark'] .status-badge.pending,
+:root[data-theme='dark'] .status-badge.open {
+    background: #493016;
+    color: #ffd09d;
+}
+
+:root[data-theme='dark'] .status-badge.rejected,
+:root[data-theme='dark'] .status-badge.cancelled,
+:root[data-theme='dark'] .status-badge.inactive {
+    background: #49272b;
+    color: #ffc0c4;
+}
+
+:root[data-theme='dark'] .status-badge.closed {
+    background: #263b4b;
+    color: #c5e3f7;
+}
+
+:root[data-theme='dark'] .modal-card input::placeholder,
+:root[data-theme='dark'] .modal-card textarea::placeholder {
+    color: #b7c6be;
+    opacity: 1;
+}
+
+:root[data-theme='dark'] .file-picker {
+    border-color: #668c78;
+    background: #20372c;
+}
+
+:root[data-theme='dark'] .file-picker:hover,
+:root[data-theme='dark'] .file-picker--selected {
+    border-color: var(--primary);
+    background: #284536;
 }
 
 html {
@@ -237,6 +472,35 @@ button:active {
 
 .modal-enter-from .modal-card,
 .modal-leave-to .modal-card { opacity: 0; transform: translateY(10px) scale(.985); }
+
+.event-summary > .status-badge {
+    display: inline-flex;
+    width: max-content;
+    min-height: 34px;
+    max-width: 100%;
+    align-items: center;
+    align-self: start;
+    justify-self: end;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    line-height: 1;
+    letter-spacing: .01em;
+}
+
+.event-summary > .status-badge::before {
+    width: 8px;
+    height: 8px;
+    flex: 0 0 8px;
+    border-radius: 50%;
+    background: currentColor;
+    content: '';
+}
+
+@media (max-width: 760px) {
+    .event-summary > .status-badge { justify-self: start; }
+}
 
 .skeleton {
     color: transparent !important;

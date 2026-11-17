@@ -27,7 +27,6 @@ class SubmitContributionRequest extends FormRequest
             'method' => ['nullable', 'in:CASH,MOBILE_MONEY,TRANSFER'],
             'note' => ['nullable', 'string', 'max:255'],
             'proofPhotoUrl' => ['required', 'string', 'max:300'],
-            'proofPhotoShape' => ['nullable', 'in:CIRCLE,SQUARE'],
         ];
     }
 }

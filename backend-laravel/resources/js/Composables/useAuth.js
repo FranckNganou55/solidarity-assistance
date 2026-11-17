@@ -7,7 +7,7 @@ export function useAuth() {
   return {
     isAuthenticated: computed(() => Boolean(store.token)),
     member: computed(() => store.member),
-    login: (identifier, password) => store.login(identifier, password),
+    login: (identifier, password, groupId) => store.login(identifier, password, groupId),
     logout: () => store.logout(),
   }
 }

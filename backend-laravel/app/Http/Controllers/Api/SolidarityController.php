@@ -131,7 +131,10 @@ class SolidarityController
             abort(404);
         }
 
-        return response()->json(DB::table('group_members as gm')->join('members as m', 'm.id', '=', 'gm.member_id')->where(['gm.group_id' => $g, 'gm.active' => true])->orderBy('m.first_name')->get()->map(function ($gm) use ($id) {
+        return response()->json(DB::table('group_members as gm')->join('members as m', 'm.id', '=', 'gm.member_id')->where('gm.group_id', $g)->where(function ($query) use ($id) {
+            $query->where(fn ($active) => $active->where('gm.active', true)->where('m.active', true))
+                ->orWhereExists(fn ($contribution) => $contribution->selectRaw('1')->from('contributions as c')->whereColumn('c.member_id', 'gm.member_id')->where('c.event_id', $id));
+        })->orderBy('m.first_name')->get()->map(function ($gm) use ($id) {
             $c = DB::table('contributions')->where(['event_id' => $id, 'member_id' => $gm->member_id])->first();
 
             return ['memberId' => (int) $gm->member_id, 'memberName' => trim($gm->first_name.' '.$gm->last_name), 'phone' => $gm->phone, 'photoUrl' => $gm->photo_url, 'photoShape' => $gm->photo_shape ?? 'CIRCLE', 'contribution' => $c ? $this->contributionDto($c) : null];
@@ -143,7 +146,7 @@ class SolidarityController
         $this->need($r, 'EVENT_CREATE');
         $g = $this->group($r);
         $d = $r->validate(['typeId' => 'required|integer', 'beneficiaryId' => 'required|integer', 'description' => 'required|string|max:1000', 'closingDate' => 'nullable|date', 'targetAmount' => 'nullable|numeric|min:0', 'overrideEligibility' => 'nullable|boolean', 'supportingDocumentUrl' => 'nullable|string|max:300']);
-        $member = DB::table('members')->where('id', $d['beneficiaryId'])->first();
+        $member = DB::table('members')->where(['id' => $d['beneficiaryId'], 'active' => true])->first();
         $gm = DB::table('group_members')->where(['group_id' => $g, 'member_id' => $member?->id, 'active' => true])->first();
         if (! $gm) {
             abort(404, 'Membre introuvable');
@@ -274,7 +277,7 @@ class SolidarityController
         }if (DB::table('contributions')->where(['event_id' => $eventId, 'member_id' => $me])->exists()) {
             abort(409, 'Vous avez déjà soumis une cotisation');
         }[$cycle] = $this->cycle($me, $g);
-        $id = DB::table('contributions')->insertGetId(['event_id' => $eventId, 'member_id' => $me, 'amount' => $d['amount'], 'method' => $d['method'] ?? 'CASH', 'note' => $d['note'] ?? null, 'status' => 'PENDING', 'cycle_number' => $cycle + 1, 'submitted_at' => now(), 'payment_received' => false, 'proof_photo_url' => $d['proofPhotoUrl'], 'proof_photo_shape' => $d['proofPhotoShape'] ?? 'SQUARE']);
+        $id = DB::table('contributions')->insertGetId(['event_id' => $eventId, 'member_id' => $me, 'amount' => $d['amount'], 'method' => $d['method'] ?? 'CASH', 'note' => $d['note'] ?? null, 'status' => 'PENDING', 'cycle_number' => $cycle + 1, 'submitted_at' => now(), 'payment_received' => false, 'proof_photo_url' => $d['proofPhotoUrl'], 'proof_photo_shape' => 'SQUARE']);
         DB::table('group_members as gm')->join('role_permissions as rp', 'rp.role_id', '=', 'gm.role_id')->where('gm.group_id', $g)->where('gm.active', true)->where('rp.permission', 'CONTRIBUTION_VALIDATE')->select('gm.member_id')->distinct()->get()->each(function ($v) use ($g, $id) {
             DB::table('app_notifications')->insert(['group_id' => $g, 'recipient_id' => $v->member_id, 'notification_type' => 'CONTRIBUTION_SUBMITTED', 'title' => 'Nouvelle cotisation à vérifier', 'message' => 'Une cotisation a été soumise.', 'entity_type' => 'Contribution', 'entity_id' => $id, 'created_at' => now()]);
         });
@@ -316,14 +319,14 @@ class SolidarityController
     public function editInvalidated(Request $r, int $id)
     {
         $g = $this->group($r);
-        $d = $r->validate(['amount' => 'required|numeric|min:0', 'method' => 'required|in:CASH,MOBILE_MONEY,TRANSFER', 'note' => 'nullable|string|max:255', 'proofPhotoUrl' => 'required|string|max:300', 'proofPhotoShape' => 'nullable|in:CIRCLE,SQUARE']);
+        $d = $r->validate(['amount' => 'required|numeric|min:0', 'method' => 'required|in:CASH,MOBILE_MONEY,TRANSFER', 'note' => 'nullable|string|max:255', 'proofPhotoUrl' => 'required|string|max:300']);
         $c = DB::table('contributions as c')->join('events as e', 'e.id', '=', 'c.event_id')->where(['c.id' => $id, 'e.group_id' => $g])->select('c.*')->first();
         if (! $c || $c->status !== 'INVALIDATED' || $c->member_id != $r->attributes->get('memberId')) {
             abort(403);
         }$minimum = (float) DB::table('association_groups')->where('id', $g)->value('min_contribution_amount');
         if ((float) $d['amount'] < $minimum) {
             abort(400, 'Le montant minimum de cotisation n’est pas atteint');
-        }DB::table('contributions')->where('id', $id)->update(['amount' => $d['amount'], 'method' => $d['method'], 'note' => $d['note'] ?? null, 'proof_photo_url' => $d['proofPhotoUrl'], 'proof_photo_shape' => $d['proofPhotoShape'] ?? 'SQUARE', 'status' => 'PENDING', 'rejection_reason' => null, 'submitted_at' => now()]);
+        }DB::table('contributions')->where('id', $id)->update(['amount' => $d['amount'], 'method' => $d['method'], 'note' => $d['note'] ?? null, 'proof_photo_url' => $d['proofPhotoUrl'], 'proof_photo_shape' => 'SQUARE', 'status' => 'PENDING', 'rejection_reason' => null, 'submitted_at' => now()]);
 
         return response()->json($this->contributionDto(DB::table('contributions')->where('id', $id)->first()));
     }
@@ -348,6 +351,9 @@ class SolidarityController
         $g = $this->group($r);
         $d = $r->validated();
         $me = $r->attributes->get('memberId');
+        if (! DB::table('assistance_types')->where(['id' => $d['typeId'], 'group_id' => $g, 'active' => true])->exists()) {
+            abort(404, 'Type d’assistance introuvable dans ce groupe');
+        }
         if (DB::table('assistance_requests')->where(['group_id' => $g, 'member_id' => $me, 'status' => 'PENDING'])->exists()) {
             abort(409, 'Une demande est déjà en attente');
         }[$cycle,$required] = $this->cycle($me, $g);
@@ -374,6 +380,9 @@ class SolidarityController
     private function createApprovedEvent(Request $r, object $a, array $d): array
     {
         $g = $this->group($r);
+        if (! DB::table('assistance_types')->where(['id' => $a->type_id, 'group_id' => $g, 'active' => true])->exists()) {
+            abort(404, 'Type d’assistance introuvable dans ce groupe');
+        }
         $m = DB::table('members')->where('id', $a->member_id)->first();
         [$cycle,$required] = $this->cycle($m->id, $g);
         $override = (bool) ($d['overrideEligibility'] ?? false);

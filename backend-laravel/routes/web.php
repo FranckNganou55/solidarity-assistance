@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
-Route::get('/', fn () => redirect('/login'));
+Route::get('/', fn () => view('app'));
 Route::get('/login', fn () => view('app'));
 Route::get('/actuator/health', fn () => response()->json(['status' => 'UP']));
 
