@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -103,7 +102,7 @@ return new class extends Migration
             $table->boolean('active')->default(true);
             $table->unsignedBigInteger('created_by')->nullable();
             $table->timestampTz('created_at')->useCurrent();
-            $table->unique(['group_id', 'name']);
+            $table->unique(['group_id', 'name'], 'uk_assistance_type_group_lower_name');
         });
 
         Schema::create('events', function (Blueprint $table): void {
@@ -204,8 +203,6 @@ return new class extends Migration
             $table->timestampTz('read_at')->nullable();
             $table->index(['group_id', 'recipient_id', 'created_at']);
         });
-
-        DB::statement('CREATE UNIQUE INDEX uk_assistance_type_group_lower_name ON assistance_types (group_id, lower(name))');
     }
 
     public function down(): void

@@ -12,6 +12,7 @@ use App\Services\MemberManagementService;
 use App\Services\PasswordHashService;
 use App\Services\SensitiveSettingsService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -68,7 +69,7 @@ class AdminController
         $size = min(100, max(1, (int) $r->query('size', 50)));
         $base = DB::table('group_members as gm')->join('members as m', 'm.id', '=', 'gm.member_id')->join('roles as role', 'role.id', '=', 'gm.role_id')->where('gm.group_id', $g);
         if ($q !== '') {
-            $base->where(fn ($w) => $w->whereRaw('lower(m.first_name || \' \' || m.last_name) like ?', ['%'.mb_strtolower($q).'%'])->orWhere('m.phone', 'like', '%'.$q.'%'));
+            $base->where(fn ($w) => $w->whereRaw('lower(CONCAT(m.first_name, \' \', m.last_name)) like ?', ['%'.mb_strtolower($q).'%'])->orWhere('m.phone', 'like', '%'.$q.'%'));
         }
         if ($active !== null) {
             if (filter_var($active, FILTER_VALIDATE_BOOLEAN)) {
@@ -537,13 +538,34 @@ class AdminController
         for ($i = 11; $i >= 0; $i--) {
             $key = now()->startOfMonth()->subMonths($i)->format('Y-m');
             $months[$key] = ['month' => $key, 'contributions' => 0, 'assistances' => 0];
-        }foreach (DB::table('contributions as c')->join('events as e', 'e.id', '=', 'c.event_id')->where('e.group_id', $g)->where('c.status', 'VALIDATED')->selectRaw("to_char(c.validated_at,'YYYY-MM') as month, count(*) as total")->groupBy('month')->get() as $row) {
-            if (isset($months[$row->month])) {
-                $months[$row->month]['contributions'] = (int) $row->total;
+        }
+
+        $periodStart = now()->startOfMonth()->subMonths(11);
+        $periodEnd = now()->endOfMonth();
+        $validatedAtValues = DB::table('contributions as c')
+            ->join('events as e', 'e.id', '=', 'c.event_id')
+            ->where('e.group_id', $g)
+            ->where('c.status', 'VALIDATED')
+            ->whereNotNull('c.validated_at')
+            ->whereBetween('c.validated_at', [$periodStart, $periodEnd])
+            ->pluck('c.validated_at');
+        foreach ($validatedAtValues as $validatedAt) {
+            $month = Carbon::parse($validatedAt)->format('Y-m');
+            if (isset($months[$month])) {
+                $months[$month]['contributions']++;
             }
-        }foreach (DB::table('events')->where('group_id', $g)->where('status', 'CLOSED')->selectRaw("to_char(closed_at,'YYYY-MM') as month,count(*) as total")->groupBy('month')->get() as $row) {
-            if (isset($months[$row->month])) {
-                $months[$row->month]['assistances'] = (int) $row->total;
+        }
+
+        $closedAtValues = DB::table('events')
+            ->where('group_id', $g)
+            ->where('status', 'CLOSED')
+            ->whereNotNull('closed_at')
+            ->whereBetween('closed_at', [$periodStart, $periodEnd])
+            ->pluck('closed_at');
+        foreach ($closedAtValues as $closedAt) {
+            $month = Carbon::parse($closedAt)->format('Y-m');
+            if (isset($months[$month])) {
+                $months[$month]['assistances']++;
             }
         }
 

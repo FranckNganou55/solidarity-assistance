@@ -12,8 +12,14 @@ Laravel sert l’API, la page Blade d’entrée et les ressources compilées par
 - `resources/js/Composables/useAuth.js` : accès réutilisable à l’authentification.
 - `resources/js/app.js` : entrée Vue/Vite.
 
+## Base de données locale
+
+Le projet utilise MySQL 8 de Wampserver. Démarrez le service MySQL et configurez dans `backend-laravel/.env` le nom `makenene-solidarite`, l’hôte `127.0.0.1`, le port `3306`, ainsi qu’un utilisateur MySQL autorisé sur cette base. Le fuseau horaire de connexion doit rester `+00:00`.
+
+Les données de PostgreSQL ont été transférées vers cette base. Une sauvegarde complète de PostgreSQL et une sauvegarde de la base MySQL avant migration sont conservées dans `storage/app/migration-backups/2026-11-18-pre-mysql/`. Ne lancez pas `migrate:fresh` sur cette base : cette commande supprimerait son schéma et ses données.
+
 ## Démarrage local
 
-Depuis la racine du projet, exécuter `scripts/start-local.ps1`. L’application est servie par Laravel à `http://127.0.0.1:8082/login`; Vite sert les modules de développement sur le port `3000`. La base PostgreSQL existante reste configurée sur le port `5433`.
+Depuis le dossier racine du dépôt, exécutez `scripts/start-local.ps1`. Le script vérifie que MySQL écoute sur le port `3306` et que PHP charge `pdo_mysql`, puis démarre Laravel sur `http://127.0.0.1:8082` et Vite sur le port `3000`. La base active de l’application est `makenene-solidarite` sur MySQL.
 
-Pour compiler les ressources de production, exécuter `npm run build` dans ce dossier. Pour vérifier l’API et les routes : `php artisan route:list --except-vendor`; pour les tests : `php artisan test --compact`.
+Pour compiler les ressources de production, exécutez `npm run build` dans `backend-laravel`. Pour vérifier l’API et les routes : `php artisan route:list --except-vendor`; pour lancer les tests : `php artisan test --compact`.

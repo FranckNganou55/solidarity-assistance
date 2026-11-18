@@ -63,7 +63,7 @@ class SolidarityController
             $base->where('e.beneficiary_id', $r->query('beneficiaryId'));
         }
         if ($q !== '') {
-            $base->where(fn ($w) => $w->whereRaw('lower(e.reference) like ?', ['%'.mb_strtolower($q).'%'])->orWhereRaw('lower(m.first_name || \' \' || m.last_name) like ?', ['%'.mb_strtolower($q).'%'])->orWhere('m.phone', 'like', '%'.$q.'%'));
+            $base->where(fn ($w) => $w->whereRaw('lower(e.reference) like ?', ['%'.mb_strtolower($q).'%'])->orWhereRaw('lower(CONCAT(m.first_name, \' \', m.last_name)) like ?', ['%'.mb_strtolower($q).'%'])->orWhere('m.phone', 'like', '%'.$q.'%'));
         }
         $total = (clone $base)->count();
         $items = $base->select('e.*', 't.name as type_name', 't.icon as type_icon', 'm.first_name as beneficiary_first_name', 'm.last_name as beneficiary_last_name', 'm.phone as beneficiary_phone', 'm.photo_url as beneficiary_photo_url', 'm.photo_shape')->orderByDesc('e.created_at')->offset($page * $size)->limit($size)->get();
@@ -94,8 +94,8 @@ class SolidarityController
         $mine = DB::table('contributions')->where(['event_id' => $e->id, 'member_id' => $this->who($r)->id])->first();
         $count = DB::table('contributions')->where('event_id', $e->id)->count();
         $sum = DB::table('contributions')->where(['event_id' => $e->id, 'status' => 'VALIDATED'])->sum('amount');
-        $closedBy = $e->closed_by ? DB::table('members')->where('id', $e->closed_by)->value(DB::raw("first_name || ' ' || last_name")) : null;
-        $by = $e->eligibility_override_by ? DB::table('members')->where('id', $e->eligibility_override_by)->value(DB::raw("first_name || ' ' || last_name")) : null;
+        $closedBy = $e->closed_by ? DB::table('members')->where('id', $e->closed_by)->value(DB::raw("CONCAT(first_name, ' ', last_name)")) : null;
+        $by = $e->eligibility_override_by ? DB::table('members')->where('id', $e->eligibility_override_by)->value(DB::raw("CONCAT(first_name, ' ', last_name)")) : null;
 
         return AssistanceEventResource::make(['id' => (int) $e->id, 'reference' => $e->reference, 'typeId' => (int) $e->type_id, 'typeName' => $e->type_name, 'typeIcon' => $e->type_icon, 'beneficiaryId' => (int) $e->beneficiary_id, 'beneficiaryName' => trim($e->beneficiary_first_name.' '.$e->beneficiary_last_name), 'beneficiaryPhone' => $e->beneficiary_phone, 'beneficiaryPhotoUrl' => $e->beneficiary_photo_url, 'description' => $e->description, 'status' => $e->status, 'closingDate' => $e->closing_date, 'contributionsOpen' => $e->status === 'OPEN' && (! $e->closing_date || $e->closing_date >= now()->toDateString()), 'daysLeft' => $e->closing_date ? now()->startOfDay()->diffInDays($e->closing_date, false) : -1, 'contributionCount' => $count, 'collectedAmount' => (float) $sum, 'targetAmount' => $e->target_amount, 'createdBy' => $e->created_by, 'createdByName' => null, 'createdAt' => $e->created_at, 'requestedAt' => $e->requested_at ?? $e->created_at, 'closedAt' => $e->closed_at, 'closedByName' => $closedBy, 'myContribution' => $mine ? $this->contributionDto($mine) : null, 'eligibilityOverridden' => (bool) $e->eligibility_overridden, 'eligibilityOverrideByName' => $by, 'supportingDocumentUrl' => $e->supporting_document_url, 'beneficiaryPhotoShape' => $e->photo_shape ?? 'CIRCLE'])->resolve();
     }
@@ -104,8 +104,8 @@ class SolidarityController
     {
         $e = DB::table('events as e')->join('assistance_types as t', 't.id', '=', 'e.type_id')->where('e.id', $c->event_id)->select('e.reference', 'e.closing_date', 'e.status', 't.name as type_name')->first();
         $m = DB::table('members')->where('id', $c->member_id)->first();
-        $v = $c->validated_by ? DB::table('members')->where('id', $c->validated_by)->value(DB::raw("first_name || ' ' || last_name")) : null;
-        $pr = $c->payment_received_by ? DB::table('members')->where('id', $c->payment_received_by)->value(DB::raw("first_name || ' ' || last_name")) : null;
+        $v = $c->validated_by ? DB::table('members')->where('id', $c->validated_by)->value(DB::raw("CONCAT(first_name, ' ', last_name)")) : null;
+        $pr = $c->payment_received_by ? DB::table('members')->where('id', $c->payment_received_by)->value(DB::raw("CONCAT(first_name, ' ', last_name)")) : null;
 
         return ContributionResource::make(['id' => (int) $c->id, 'eventId' => (int) $c->event_id, 'eventReference' => $e->reference, 'eventTypeName' => $e->type_name, 'memberId' => (int) $m->id, 'memberName' => trim($m->first_name.' '.$m->last_name), 'memberPhone' => $m->phone, 'memberPhotoUrl' => $m->photo_url, 'amount' => (float) $c->amount, 'method' => $c->method, 'status' => $c->status, 'note' => $c->note, 'cycleNumber' => $c->cycle_number, 'submittedAt' => $c->submitted_at, 'validatedAt' => $c->validated_at, 'validatedByName' => $v, 'rejectionReason' => $c->rejection_reason, 'eventClosingDate' => $e->closing_date, 'eventStatus' => $e->status, 'paymentReceived' => (bool) $c->payment_received, 'receiptReference' => $c->receipt_reference, 'paymentReceivedAt' => $c->payment_received_at, 'paymentReceivedByName' => $pr, 'proofPhotoUrl' => $c->proof_photo_url, 'proofPhotoShape' => $c->proof_photo_shape ?? 'SQUARE', 'memberPhotoShape' => $m->photo_shape ?? 'CIRCLE'])->resolve();
     }

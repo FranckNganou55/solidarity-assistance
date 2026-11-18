@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $apiRoot = Join-Path $projectRoot 'backend-laravel'
@@ -8,8 +8,8 @@ $apiErrorLog = Join-Path $apiRoot 'storage\logs\local-api-error.log'
 $webLog = Join-Path $apiRoot 'storage\logs\local-vite.log'
 $webErrorLog = Join-Path $apiRoot 'storage\logs\local-vite-error.log'
 
-if (-not (Get-NetTCPConnection -State Listen -LocalPort 5433 -ErrorAction SilentlyContinue)) {
-    throw 'PostgreSQL ne répond pas sur le port 5433. Le script ne crée pas et ne remplace pas la base existante.'
+if (-not (Get-NetTCPConnection -State Listen -LocalPort 3306 -ErrorAction SilentlyContinue)) {
+    throw 'MySQL Wampserver ne répond pas sur le port 3306. Démarrez le service MySQL avant de lancer le site.'
 }
 if (Get-NetTCPConnection -State Listen -LocalPort 8082 -ErrorAction SilentlyContinue) {
     throw 'Le port 8082 est déjà utilisé. Vérifiez le service avant de relancer le script.'
@@ -18,7 +18,7 @@ if (Get-NetTCPConnection -State Listen -LocalPort 3000 -ErrorAction SilentlyCont
     throw 'Le port 3000 est déjà utilisé. Vérifiez le service avant de relancer le script.'
 }
 if (-not (Test-Path (Join-Path $apiRoot '.env'))) {
-    throw 'Le fichier backend-laravel/.env est absent. Configurez la connexion PostgreSQL existante.'
+    throw 'Le fichier backend-laravel/.env est absent. Configurez la connexion MySQL de Wampserver.'
 }
 if (-not (Test-Path (Join-Path $webRoot 'node_modules'))) {
     throw 'Dépendances Vue absentes. Exécutez npm install dans backend-laravel.'
@@ -26,7 +26,11 @@ if (-not (Test-Path (Join-Path $webRoot 'node_modules'))) {
 
 $php = (Get-Command php.exe -ErrorAction Stop).Source
 $npm = (Get-Command npm.cmd -ErrorAction Stop).Source
-$apiArgs = @('-d', 'extension=php_pdo_pgsql.dll', '-S', '127.0.0.1:8082', '-t', '.', '../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php')
+$phpModules = & $php -m
+if ($phpModules -notcontains 'pdo_mysql') {
+    throw 'Le PHP sélectionné ne charge pas pdo_mysql. Sélectionnez la version PHP de Wampserver avec cette extension activée.'
+}
+$apiArgs = @('-S', '127.0.0.1:8082', '-t', '.', '../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php')
 $api = Start-Process -FilePath $php -ArgumentList $apiArgs -WorkingDirectory (Join-Path $apiRoot 'public') -WindowStyle Hidden -PassThru -RedirectStandardOutput $apiLog -RedirectStandardError $apiErrorLog
 $web = Start-Process -FilePath $npm -ArgumentList @('run', 'dev', '--', '--host', '127.0.0.1', '--port', '3000', '--strictPort') -WorkingDirectory $webRoot -WindowStyle Hidden -PassThru -RedirectStandardOutput $webLog -RedirectStandardError $webErrorLog
 
