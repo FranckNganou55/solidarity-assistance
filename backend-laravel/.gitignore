@@ -19,6 +19,8 @@
 /public/hot
 /public/storage
 /storage/app/public/uploads/
+/storage/app/private/demo-credentials.txt
+/storage/app/migration-backups/
 /storage/*.key
 /storage/pail
 /vendor

@@ -21,6 +21,16 @@ Le code Laravel/Vue de `backend-laravel/` est l’application utilisée. Le doss
 
 La base `makenene-solidarite` existe déjà dans MySQL et contient les données migrées depuis PostgreSQL. Une sauvegarde de migration, incluant l’archive PostgreSQL, se trouve dans `backend-laravel/storage/app/migration-backups/2026-11-18-pre-mysql/`. Traitez ce dossier comme une sauvegarde privée et conservez-en une copie sûre.
 
+### Initialiser une nouvelle base avec les données de démonstration
+
+Le dépôt contient un seeder avec des groupes et membres **fictifs et anonymisés**. Il ne copie pas les données réelles de l’association. Sur une base MySQL neuve, activez temporairement `SEED_DEMO_DATA=true` dans `backend-laravel/.env`, puis lancez depuis `backend-laravel/` :
+
+```powershell
+php artisan migrate --seed
+```
+
+Les identifiants temporaires générés sont enregistrés localement dans `storage/app/private/demo-credentials.txt`, sous `backend-laravel/`. Ce fichier est ignoré par Git. Les comptes doivent changer leur mot de passe à la première connexion. Après le seeding, remettez `SEED_DEMO_DATA=false`. Si la base contient déjà d’autres groupes, le seeder ignore les exemples et conserve les données présentes.
+
 ## Installation ou préparation du poste
 
 Depuis PowerShell à la racine du dépôt :
