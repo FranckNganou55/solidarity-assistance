@@ -1,30 +1,29 @@
 # Makénéné Solidarité
 
-Application web responsive de gestion des groupes, des membres, des assistances, des demandes et des cotisations.
+Application web responsive de gestion multi-groupes des membres, assistances, événements, demandes et cotisations.
 
-## Technologies actuelles
+## Stack et dossiers actifs
 
-- **Backend et vues serveur :** Laravel 13 / PHP 8.3 (`backend-laravel/`)
-- **Interface :** Vue 3, Vue Router et Pinia (`backend-laravel/resources/js/`)
-- **Build frontend :** Vite
-- **Base de données :** PostgreSQL (`makenene_solidarite`, port local `5433`)
+- **Application backend et serveur web :** Laravel 13 / PHP 8.3 — `backend-laravel/`
+- **Interface :** Vue 3, Vue Router et Pinia — `backend-laravel/resources/js/`
+- **Assets frontend :** Vite
+- **Base active :** MySQL 8 de Wampserver, base `makenene-solidarite`, `127.0.0.1:3306`
+- **Fichiers téléversés :** `backend-laravel/storage/app/public/uploads`
 
-Le code actif de l’application Laravel et Vue se trouve dans `backend-laravel`. Les pièces jointes téléversées sont stockées dans `backend-laravel/storage/app/public/uploads`.
+Le code Laravel/Vue de `backend-laravel/` est l’application utilisée. Le dossier `frontend-vue/` et les anciens dossiers `backend/` et `frontend/` visibles à la racine ne sont pas les points d’entrée du démarrage actuel.
 
 ## Prérequis
 
-Sur le poste de développement, installer et rendre accessibles dans le `PATH` :
+- Wampserver démarré avec le service **MySQL** actif sur le port `3306`.
+- PHP 8.3 compatible Laravel 13, avec `pdo_mysql` activé.
+- Composer, Node.js et npm accessibles dans PowerShell.
+- Le fichier `backend-laravel/.env` configuré pour la base locale.
 
-- PHP **8.3 ou supérieur compatible avec Laravel 13**, avec les extensions Laravel requises et PDO PostgreSQL (`pdo_pgsql`)
-- Composer
-- Node.js et npm
-- PostgreSQL, avec le service et la base accessibles selon la configuration locale
+La base `makenene-solidarite` existe déjà dans MySQL et contient les données migrées depuis PostgreSQL. Une sauvegarde de migration, incluant l’archive PostgreSQL, se trouve dans `backend-laravel/storage/app/migration-backups/2026-11-18-pre-mysql/`. Traitez ce dossier comme une sauvegarde privée et conservez-en une copie sûre.
 
-Le script fourni attend PostgreSQL sur `127.0.0.1:5433`. Il ne démarre pas le serveur PostgreSQL lui-même. Le cluster PostgreSQL local existant se trouve dans `backend/data/postgres` : ce dossier contient les fichiers internes de la base, il ne faut ni le déplacer ni le supprimer pour démarrer Laravel.
+## Installation ou préparation du poste
 
-## Première installation
-
-Ouvrir PowerShell à la racine du dépôt :
+Depuis PowerShell à la racine du dépôt :
 
 ```powershell
 cd backend-laravel
@@ -32,70 +31,80 @@ composer install
 npm install
 ```
 
-Vérifier que `backend-laravel/.env` existe. Pour le créer depuis le modèle (uniquement s’il n’existe pas), exécuter depuis `backend-laravel` :
+Si `backend-laravel/.env` n’existe pas, créez-le depuis le modèle :
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Renseigner ensuite les paramètres PostgreSQL (`DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`). Le fichier `.env` contient des secrets et ne doit pas être partagé.
+Puis configurez les valeurs de connexion MySQL dans `.env` :
 
-Pour une installation réellement neuve uniquement, générer une clé Laravel si `APP_KEY` est vide :
-
-```powershell
-php artisan key:generate
+```dotenv
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=makenene-solidarite
+DB_USERNAME=VOTRE_UTILISATEUR_MYSQL
+DB_PASSWORD=VOTRE_MOT_DE_PASSE
+DB_TIMEZONE=+00:00
 ```
 
-Ne pas régénérer la clé d’une installation existante : cela invaliderait les sessions et données chiffrées. Créer le lien public des fichiers téléversés si nécessaire :
+Utilisez un compte MySQL limité à cette base, plutôt que de partager ses identifiants. Ne publiez jamais `.env`. L’application utilise aussi les variables `MAIL_*` de ce fichier pour Brevo ; utilisez un expéditeur autorisé dans Brevo et vérifiez les journaux transactionnels pour confirmer la remise effective des messages.
+
+Pour une installation neuve seulement, si `APP_KEY` est vide, générez-la avec `php artisan key:generate`. Ne régénérez pas la clé d’une installation existante : cela invaliderait les sessions et les données chiffrées. Créez le lien de stockage si nécessaire :
 
 ```powershell
 php artisan storage:link
 ```
 
-Avant toute migration, vérifier l’état du schéma sans modifier la base :
+La base MySQL actuelle contient les données de l’application. Avant toute opération de schéma, vérifiez l’état des migrations :
 
 ```powershell
-php -d extension=php_pdo_pgsql.dll artisan migrate:status
+php artisan migrate:status
 ```
 
-Les migrations Laravel du projet complètent le schéma métier existant. **Ne pas exécuter** `php artisan migrate:fresh`, `php artisan db:wipe` ou un seeder destructif sur la base contenant les données existantes. Toute migration de données ou de schéma doit être précédée d’une sauvegarde PostgreSQL vérifiée.
+**Ne lancez pas** `php artisan migrate:fresh`, `php artisan db:wipe` ou un seeder destructif sur cette base. Ces commandes peuvent supprimer les données. Faites une sauvegarde vérifiée avant toute migration de production.
 
 ## Démarrer l’application en local
 
-1. Démarrer le service PostgreSQL et vérifier que la base configurée dans `.env` est accessible sur le port `5433`.
-2. Depuis PowerShell, à la racine du dépôt, lancer :
+1. Démarrez MySQL depuis Wampserver.
+2. Ouvrez PowerShell à la racine du dépôt et lancez :
 
    ```powershell
    .\scripts\start-local.ps1
    ```
 
-3. Ouvrir l’application : **http://127.0.0.1:8082/login**.
+3. Ouvrez **http://127.0.0.1:8082/login**.
 
-Le script démarre le serveur Laravel sur `127.0.0.1:8082` et le serveur de développement Vite sur `127.0.0.1:3000`. Il vérifie les ports et les dépendances locales avant de démarrer. Pour utiliser les commandes Artisan séparément, activer l’extension PHP PostgreSQL comme dans le script (`-d extension=php_pdo_pgsql.dll`).
+Le script vérifie MySQL, PHP `pdo_mysql`, le fichier `.env` et les dépendances Vue. Il lance Laravel sur le port `8082` et Vite sur `3000`. Les journaux sont écrits dans `backend-laravel/storage/logs/local-api*.log` et `local-vite*.log`. Le script ne démarre pas Wampserver/MySQL.
 
 ## Commandes utiles
 
-À exécuter depuis `backend-laravel` :
+À exécuter depuis `backend-laravel/` :
 
 ```powershell
-# Vérifier les migrations appliquées (lecture seule)
-php -d extension=php_pdo_pgsql.dll artisan migrate:status
+# État des migrations, sans modification de la base
+php artisan migrate:status
 
-# Lister les routes web et API
-php artisan route:list
+# Routes web et API
+php artisan route:list --except-vendor
 php artisan route:list --path=api --except-vendor
 
-# Compiler les fichiers Vue/CSS pour une livraison
+# Compilation frontend pour livraison
 npm run build
 ```
 
-Les tests automatisés peuvent être lancés avec `php artisan test`, une fois les variables d’environnement et la base de test correctement configurées.
+Pour lancer les tests automatisés, configurez d’abord une base de test distincte, puis exécutez `php artisan test`.
+
+## Courriels Brevo
+
+La configuration SMTP est lue depuis les variables `MAIL_*` de `backend-laravel/.env`. Renseignez les paramètres SMTP fournis par Brevo et un expéditeur/domaine autorisé. L’acceptation d’un message par le relais SMTP ne garantit pas sa livraison dans la boîte du destinataire : consultez les journaux transactionnels Brevo et vérifiez aussi les courriers indésirables et les rejets.
 
 ## Déploiement
 
-Le script `start-local.ps1` et le serveur Vite de développement sont destinés au poste local, pas à un serveur public. Un déploiement doit servir Laravel depuis `backend-laravel/public`, utiliser HTTPS, une configuration `.env` de production (`APP_ENV=production`, `APP_DEBUG=false`), une base PostgreSQL sauvegardée et un stockage persistant pour `storage/app/public/uploads`.
+`start-local.ps1` et le serveur Vite de développement servent au poste local. Pour un déploiement, configurez le serveur web afin qu’il pointe vers `backend-laravel/public`, activez HTTPS, définissez `APP_ENV=production` et `APP_DEBUG=false`, et conservez les secrets hors du dépôt. Prévoyez une base MySQL sauvegardée, un stockage persistant pour les fichiers et une sauvegarde testée avant les migrations.
 
-Préparer les dépendances et les assets de production depuis `backend-laravel` :
+Depuis `backend-laravel/`, préparez les dépendances et les assets :
 
 ```sh
 composer install --no-dev --optimize-autoloader
@@ -103,8 +112,9 @@ npm ci
 npm run build
 ```
 
-Les migrations de production doivent être revues et exécutées après sauvegarde, avec `php artisan migrate --force`. Ne pas copier le `.env` local ni ses secrets vers un dépôt public.
+Après revue et sauvegarde de la base, appliquez les migrations de production avec `php artisan migrate --force`. N’utilisez pas le `.env` local sur un serveur public.
 
+---
 ## Cahier des charges — version actualisée
 
 **Version de référence : 2.0 — 16 novembre 2026**
@@ -173,9 +183,9 @@ L’accueil présente les statistiques du groupe aux super administrateurs et ad
 
 ### 9. Architecture et exploitation
 
-La stack actuelle remplace celle du document initial : **Laravel/PHP 8.3, Vue.js 3, Vite et PostgreSQL**. L’application Laravel se trouve dans `backend-laravel/` ; les pages et composants Vue sont organisés dans `backend-laravel/resources/js/`. Laravel porte les modèles, contrôleurs, requêtes, middlewares, services, routes web/API, migrations et ressources. PostgreSQL conserve les données métier ; les fichiers téléversés sont conservés dans le stockage persistant Laravel.
+La stack actuelle remplace celle du document initial : **Laravel/PHP 8.3, Vue.js 3, Vite et MySQL 8 (Wampserver en local)**. L’application Laravel se trouve dans `backend-laravel/` ; les pages et composants Vue sont organisés dans `backend-laravel/resources/js/`. Laravel porte les modèles, contrôleurs, requêtes, middlewares, services, routes web/API, migrations et ressources. MySQL conserve les données métier ; les fichiers téléversés sont conservés dans le stockage persistant Laravel.
 
-Le déploiement doit servir l’application depuis `backend-laravel/public`, avec HTTPS, `APP_DEBUG=false`, secrets conservés hors du dépôt, sauvegardes PostgreSQL régulières et testées, stockage persistant des fichiers, migrations relues avant exécution et journalisation des actions sensibles. Le script de développement `scripts/start-local.ps1` n’est pas un serveur de production.
+Le déploiement doit servir l’application depuis `backend-laravel/public`, avec HTTPS, `APP_DEBUG=false`, secrets conservés hors du dépôt, sauvegardes MySQL régulières et testées, stockage persistant des fichiers, migrations relues avant exécution et journalisation des actions sensibles. Le script de développement `scripts/start-local.ps1` n’est pas un serveur de production.
 
 ### 10. Critères d’acceptation essentiels
 
