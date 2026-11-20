@@ -22,6 +22,8 @@ Route::middleware('api.auth')->group(function () {
     Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
     Route::get('/groups', [AuthController::class, 'groups']);
     Route::post('/groups', [GroupController::class, 'create']);
+    Route::get('/groups/manage', [GroupController::class, 'index']);
+    Route::get('/groups/members/directory', [GroupController::class, 'memberDirectory']);
     Route::put('/groups/{groupId}', [GroupController::class, 'update']);
     Route::delete('/groups/{groupId}', [GroupController::class, 'delete']);
     Route::post('/groups/{groupId}/members', [GroupController::class, 'addMember']);

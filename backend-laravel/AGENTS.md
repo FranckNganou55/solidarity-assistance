@@ -30,9 +30,11 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Stick to existing directory structure; don't create new base folders without approval.
 - Do not change the application's dependencies without approval.
 
-## Frontend Bundling
+## Frontend Assets
 
-- If a frontend change doesn't show in the UI or you get a "Unable to locate file in Vite manifest" error, run `npm run build` or ask the user to run `npm run dev` or `composer run dev`.
+- Browser pages are rendered by Blade templates in `resources/views/`; `resources/js/blade.js` contains framework-free browser interactions.
+- Laravel serves the checked-in bundle from `public/build/assets/app.js` and `public/build/assets/app.css`. Vite/Node.js are only needed to rebuild assets, not to run the application.
+- When frontend source files change, deliver the matching compiled bundle alongside them so the UI remains in sync.
 
 ## Documentation Files
 

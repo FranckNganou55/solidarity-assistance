@@ -64,12 +64,33 @@ class AuthSecurityTest extends TestCase
                 'email' => 'aline@example.test',
             ])
             ->assertCreated()
-            ->assertJsonPath('credentialsEmailSent', true);
+            ->assertJsonPath('credentialsEmailQueued', true);
 
+        $this->app->terminate();
         $this->assertArrayNotHasKey('temporaryPassword', $response->json());
         Mail::assertSent(MemberAccessCredentials::class, fn (MemberAccessCredentials $mail): bool => $mail->hasTo('aline@example.test')
             && $mail->identifier === '600000022'
             && $mail->groupName === 'Groupe courriel');
+    }
+
+    public function test_member_creation_rejects_an_email_already_owned_by_another_account(): void
+    {
+        [$groupId, $adminId] = $this->createGroupMember('Groupe e-mail unique', '600000023', ['MEMBER_CREATE']);
+        DB::table('members')->where('id', $adminId)->update(['email' => 'shared@example.test']);
+        $this->authenticateAs($adminId);
+
+        $this->withHeader('X-Group-Id', (string) $groupId)
+            ->postJson('/api/members', [
+                'firstName' => 'Autre',
+                'lastName' => 'Membre',
+                'phone' => '600000024',
+                'city' => 'Makenene',
+                'email' => 'SHARED@example.test',
+            ])
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'conflict');
+
+        $this->assertDatabaseMissing('members', ['phone' => '600000024']);
     }
 
     public function test_only_super_admin_can_create_a_group_and_the_new_admin_is_assigned_to_it(): void
@@ -93,8 +114,9 @@ class AuthSecurityTest extends TestCase
             ])
             ->assertCreated()
             ->assertJsonPath('name', 'Nouveau groupe')
-            ->assertJsonPath('credentialsEmailSent', true);
+            ->assertJsonPath('credentialsEmailQueued', true);
 
+        $this->app->terminate();
         $newGroupId = (int) DB::table('association_groups')->where('name', 'Nouveau groupe')->value('id');
         $adminId = (int) DB::table('members')->where('phone', '600000032')->value('id');
         $superAdminMembershipCount = DB::table('group_members')->where(['group_id' => $newGroupId, 'member_id' => $superAdminId, 'active' => true])->count();

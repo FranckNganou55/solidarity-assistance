@@ -1,20 +1,27 @@
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
-import vue from '@vitejs/plugin-vue';
-import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
     plugins: [
-        vue(),
         laravel({
-            input: ['resources/js/app.js'],
+            input: ['resources/js/blade.js'],
             refresh: true,
         }),
-        tailwindcss(),
     ],
     server: {
         watch: {
             ignored: ['**/storage/framework/views/**'],
+        },
+    },
+    build: {
+        rollupOptions: {
+            output: {
+                entryFileNames: 'assets/app.js',
+                chunkFileNames: 'assets/[name].js',
+                assetFileNames: (asset) => asset.name?.endsWith('.css')
+                    ? 'assets/app.css'
+                    : 'assets/[name][extname]',
+            },
         },
     },
 });

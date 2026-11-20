@@ -1,25 +1,42 @@
-# Makénéné Solidarité — Laravel et Vue
+# Makénéné Solidarité — application Laravel
 
-Laravel sert l’API, la page Blade d’entrée et les ressources compilées par Vite. Le frontend Vue se trouve dans `resources/js`; il utilise le logo public `public/logo-fm-mak.jpeg` et conserve les styles de l’application.
-
-## Organisation Vue
-
-- `resources/js/Components/ui`, `forms`, `tables` : composants d’interface réutilisables.
-- `resources/js/Pages` : pages du tableau de bord, des assistances, des évènements, des cotisations, des membres et de l’administration.
-- `resources/js/Layouts` : layouts authentifié et de connexion.
-- `resources/js/Services` : accès API et authentification.
-- `resources/js/Store/index.js` : état partagé Pinia.
-- `resources/js/Composables/useAuth.js` : accès réutilisable à l’authentification.
-- `resources/js/app.js` : entrée Vue/Vite.
-
-## Base de données locale
-
-Le projet utilise MySQL 8 de Wampserver. Démarrez le service MySQL et configurez dans `backend-laravel/.env` le nom `makenene-solidarite`, l’hôte `127.0.0.1`, le port `3306`, ainsi qu’un utilisateur MySQL autorisé sur cette base. Le fuseau horaire de connexion doit rester `+00:00`.
-
-Les données de PostgreSQL ont été transférées vers cette base. Une sauvegarde complète de PostgreSQL et une sauvegarde de la base MySQL avant migration sont conservées dans `storage/app/migration-backups/2026-11-18-pre-mysql/`. Ne lancez pas `migrate:fresh` sur cette base : cette commande supprimerait son schéma et ses données.
+L’application fonctionne sous Laravel/PHP et MySQL. Toutes les pages web sont rendues par des vues Blade (`resources/views`) et utilisent un petit module JavaScript sans framework (`resources/js/blade.js`) pour les interactions et appels API. Le bundle navigateur est livré dans `public/build/assets`. Node.js et npm ne sont pas nécessaires pour installer, démarrer ou déployer l’application.
 
 ## Démarrage local
 
-Depuis le dossier racine du dépôt, exécutez `scripts/start-local.ps1`. Le script vérifie que MySQL écoute sur le port `3306` et que PHP charge `pdo_mysql`, puis démarre Laravel sur `http://127.0.0.1:8082` et Vite sur le port `3000`. La base active de l’application est `makenene-solidarite` sur MySQL.
+Prérequis : PHP 8.3 avec `pdo_mysql`, Composer, et MySQL Wampserver démarré.
 
-Pour compiler les ressources de production, exécutez `npm run build` dans `backend-laravel`. Pour vérifier l’API et les routes : `php artisan route:list --except-vendor`; pour lancer les tests : `php artisan test --compact`.
+Depuis la racine du dépôt, configurez `backend-laravel/.env` si nécessaire, puis lancez :
+
+```powershell
+cd backend-laravel
+composer install
+php artisan migrate --seed
+cd ..
+.\scripts\start-local.ps1
+```
+
+Le site est servi par Laravel à `http://127.0.0.1:8082`. Le script démarre un seul serveur PHP et vérifie que les fichiers compilés sont présents. La base locale `makenene-solidarite` contient des données réelles : ne lancez pas `migrate:fresh` ni `db:wipe`.
+
+## Vues Blade et assets
+
+- Les pages publiques, la connexion et les pages de l’espace connecté sont dans `resources/views/pages/`, `resources/views/auth/` et `resources/views/layouts/`.
+- Les routes web passent par `PageController`, qui sélectionne une vue Blade pour chaque page; les opérations métier restent dans les contrôleurs API Laravel, services, requêtes et modèles.
+- Le navigateur charge `public/build/assets/app.js` et `public/build/assets/app.css` depuis `resources/views/layouts/application.blade.php`.
+- Vite et Node.js ne sont que des outils facultatifs de compilation des assets; ils ne sont pas nécessaires au démarrage ni au déploiement si le bundle versionné est présent.
+- Aucune commande Node.js/npm n’est exécutée au démarrage ou sur le serveur de déploiement.
+- Lorsqu’une nouvelle version du frontend est préparée, le bundle compilé doit être livré avec le code Laravel dans `public/build/assets/`.
+
+## Déploiement
+
+Installez les dépendances PHP avec Composer, configurez `.env` et le service MySQL, puis faites pointer le serveur web vers `public/`. Activez HTTPS, `APP_DEBUG=false`, un stockage persistant pour les fichiers téléversés et des sauvegardes régulières. Les assets précompilés sont inclus dans Git : pas d’étape npm sur le serveur. Pour reconstruire les assets en développement, installez les dépendances du `package-lock.json` puis lancez `npm run build`.
+
+Commandes de contrôle :
+
+```powershell
+php artisan about
+php artisan route:list --except-vendor
+php artisan test --compact
+```
+
+Les tests utilisent une base de test SQLite en mémoire définie dans `phpunit.xml`; ne remplacez pas cette configuration par la base MySQL réelle.

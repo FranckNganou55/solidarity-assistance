@@ -37,7 +37,7 @@ return new class extends Migration
 
         Schema::create('roles', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('group_id')->constrained('association_groups');
+            $table->foreignId('group_id')->nullable()->constrained('association_groups');
             $table->string('code', 40);
             $table->string('name', 80);
             $table->string('description', 255)->nullable();

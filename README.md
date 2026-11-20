@@ -5,31 +5,41 @@ Application web responsive de gestion multi-groupes des membres, assistances, é
 ## Stack et dossiers actifs
 
 - **Application backend et serveur web :** Laravel 13 / PHP 8.3 — `backend-laravel/`
-- **Interface :** Vue 3, Vue Router et Pinia — `backend-laravel/resources/js/`
-- **Assets frontend :** Vite
+- **Interface :** vues Laravel Blade dans `backend-laravel/resources/views/`, avec JavaScript natif pour les interactions
+- **Assets navigateur :** `backend-laravel/resources/js/blade.js` et CSS Laravel, compilés dans `backend-laravel/public/build/assets/`
 - **Base active :** MySQL 8 de Wampserver, base `makenene-solidarite`, `127.0.0.1:3306`
 - **Fichiers téléversés :** `backend-laravel/storage/app/public/uploads`
 
-Le code Laravel/Vue de `backend-laravel/` est l’application utilisée. Le dossier `frontend-vue/` et les anciens dossiers `backend/` et `frontend/` visibles à la racine ne sont pas les points d’entrée du démarrage actuel.
+`backend-laravel/` est l’unique point d’entrée de l’application active. Les anciens clients Vue/Expo et l’ancien backend Spring Boot ne sont pas démarrés par le script local. Les pages web actives sont servies côté serveur par Blade; les appels de données passent par l’API Laravel.
 
 ## Prérequis
 
 - Wampserver démarré avec le service **MySQL** actif sur le port `3306`.
 - PHP 8.3 compatible Laravel 13, avec `pdo_mysql` activé.
-- Composer, Node.js et npm accessibles dans PowerShell.
+- Composer accessible dans PowerShell.
 - Le fichier `backend-laravel/.env` configuré pour la base locale.
 
-La base `makenene-solidarite` existe déjà dans MySQL et contient les données migrées depuis PostgreSQL. Une sauvegarde de migration, incluant l’archive PostgreSQL, se trouve dans `backend-laravel/storage/app/migration-backups/2026-11-18-pre-mysql/`. Traitez ce dossier comme une sauvegarde privée et conservez-en une copie sûre.
+La base `makenene-solidarite` existe déjà dans MySQL et contient les données actuelles. Le dépôt comprend un snapshot chiffré de ces données pour les nouvelles installations. Une copie de sauvegarde locale est aussi conservée dans `backend-laravel/storage/app/migration-backups/2026-11-18-pre-mysql/`. Traitez les sauvegardes et les clés comme des éléments privés.
 
-### Initialiser une nouvelle base avec les données de démonstration
+### Transférer les données actuelles vers une nouvelle installation
 
-Le dépôt contient un seeder avec des groupes et membres **fictifs et anonymisés**. Il ne copie pas les données réelles de l’association. Sur une base MySQL neuve, activez temporairement `SEED_DEMO_DATA=true` dans `backend-laravel/.env`, puis lancez depuis `backend-laravel/` :
+Le fichier `backend-laravel/database/seed-data/current-association-data.enc` contient le snapshot chiffré des groupes, membres, coordonnées, rôles, assistances, cotisations, demandes, paramètres, notifications et historiques. Il ne contient ni mots de passe ni jetons de session. Le chiffrement utilise AES-256-GCM.
+
+La clé n’est jamais incluse dans Git. Transférez-la séparément et de façon privée depuis `backend-laravel/storage/app/private/association-data-export-key.txt`, puis placez-la au même chemin dans la nouvelle installation. Sur une base MySQL vide, lancez les migrations et l’import :
 
 ```powershell
 php artisan migrate --seed
 ```
 
-Les identifiants temporaires générés sont enregistrés localement dans `storage/app/private/demo-credentials.txt`, sous `backend-laravel/`. Ce fichier est ignoré par Git. Les comptes doivent changer leur mot de passe à la première connexion. Après le seeding, remettez `SEED_DEMO_DATA=false`. Si la base contient déjà d’autres groupes, le seeder ignore les exemples et conserve les données présentes.
+Les données sont importées uniquement dans une base vide. Les mots de passe sont régénérés pour les membres actifs ; leurs identifiants temporaires sont inscrits dans `backend-laravel/storage/app/private/imported-member-credentials.txt`. Distribuez-les de façon privée. Chaque membre devra changer son mot de passe à la première connexion. Les sessions et jetons précédents ne sont pas transférés.
+
+Après toute mise à jour des données de la base source, régénérez le bundle avec `php artisan app:export-association-snapshot` dans `backend-laravel/`, puis versionnez le nouveau fichier chiffré. Conservez la même clé privée pour ces réexports. Le fichier de clé et les accès temporaires sous `storage/app/private/` sont ignorés par Git.
+
+### Installation sans clé de déchiffrement
+
+Si la clé privée n’est pas disponible, `php artisan migrate --seed` n’importe pas le snapshot et crée uniquement un compte super administrateur global, sans groupe fictif. Ses accès temporaires sont enregistrés dans `backend-laravel/storage/app/private/super-admin-credentials.txt`. Le super administrateur peut se connecter sans choisir de groupe : s’il en existe, il arrive dans le premier groupe créé ; sinon, l’application ouvre la création du premier groupe. Pour importer les groupes et membres actuels, copiez d’abord la clé privée dans `storage/app/private/association-data-export-key.txt`, puis exécutez le seeding sur une base vide.
+
+Pour définir les mêmes accès initiaux sur plusieurs installations, configurez `SUPER_ADMIN_IDENTIFIER` et `SUPER_ADMIN_INITIAL_PASSWORD` dans le `.env` privé de chacune avant `php artisan migrate --seed`. Le mot de passe est stocké sous forme bcrypt. Ne mettez jamais cette valeur dans Git : le dépôt est partageable et un secret codé en dur donnerait un accès privilégié à toute personne qui le consulte. Sur une base déjà initialisée, après avoir défini ces variables, exécutez `php artisan app:sync-super-admin-password` une fois. Transmettez les deux valeurs par un canal privé aux personnes qui installent l’application.
 
 ## Installation ou préparation du poste
 
@@ -38,7 +48,6 @@ Depuis PowerShell à la racine du dépôt :
 ```powershell
 cd backend-laravel
 composer install
-npm install
 ```
 
 Si `backend-laravel/.env` n’existe pas, créez-le depuis le modèle :
@@ -86,7 +95,7 @@ php artisan migrate:status
 
 3. Ouvrez **http://127.0.0.1:8082/login**.
 
-Le script vérifie MySQL, PHP `pdo_mysql`, le fichier `.env` et les dépendances Vue. Il lance Laravel sur le port `8082` et Vite sur `3000`. Les journaux sont écrits dans `backend-laravel/storage/logs/local-api*.log` et `local-vite*.log`. Le script ne démarre pas Wampserver/MySQL.
+Le script vérifie MySQL, PHP `pdo_mysql`, le fichier `.env` et les fichiers compilés versionnés dans Laravel. Il lance uniquement le serveur Laravel sur le port `8082`; aucun serveur Node.js ou Vite n’est démarré. Le script ne démarre pas Wampserver/MySQL.
 
 ## Commandes utiles
 
@@ -100,26 +109,24 @@ php artisan migrate:status
 php artisan route:list --except-vendor
 php artisan route:list --path=api --except-vendor
 
-# Compilation frontend pour livraison
-npm run build
+# Vérification des services Laravel
+php artisan about
 ```
 
 Pour lancer les tests automatisés, configurez d’abord une base de test distincte, puis exécutez `php artisan test`.
 
 ## Courriels Brevo
 
-La configuration SMTP est lue depuis les variables `MAIL_*` de `backend-laravel/.env`. Renseignez les paramètres SMTP fournis par Brevo et un expéditeur/domaine autorisé. L’acceptation d’un message par le relais SMTP ne garantit pas sa livraison dans la boîte du destinataire : consultez les journaux transactionnels Brevo et vérifiez aussi les courriers indésirables et les rejets.
+La configuration SMTP est lue depuis les variables `MAIL_*` de `backend-laravel/.env`. Renseignez les paramètres SMTP fournis par Brevo et un expéditeur/domaine autorisé. `APP_URL` doit être l’adresse HTTPS réellement accessible aux membres : le bouton « Se connecter » dans le courriel de bienvenue utilise cette adresse. L’acceptation d’un message par le relais SMTP ne garantit pas sa livraison dans la boîte du destinataire : consultez les journaux transactionnels Brevo et vérifiez aussi les courriers indésirables et les rejets.
 
 ## Déploiement
 
-`start-local.ps1` et le serveur Vite de développement servent au poste local. Pour un déploiement, configurez le serveur web afin qu’il pointe vers `backend-laravel/public`, activez HTTPS, définissez `APP_ENV=production` et `APP_DEBUG=false`, et conservez les secrets hors du dépôt. Prévoyez une base MySQL sauvegardée, un stockage persistant pour les fichiers et une sauvegarde testée avant les migrations.
+Pour un déploiement, configurez le serveur web afin qu’il pointe vers `backend-laravel/public`, activez HTTPS, définissez `APP_ENV=production` et `APP_DEBUG=false`, et conservez les secrets hors du dépôt. Les fichiers CSS/JavaScript compilés sont livrés dans le dépôt : le serveur n’a besoin que de PHP/Laravel et MySQL, sans Node.js/npm. Prévoyez une base MySQL sauvegardée, un stockage persistant pour les fichiers et une sauvegarde testée avant les migrations.
 
 Depuis `backend-laravel/`, préparez les dépendances et les assets :
 
 ```sh
 composer install --no-dev --optimize-autoloader
-npm ci
-npm run build
 ```
 
 Après revue et sauvegarde de la base, appliquez les migrations de production avec `php artisan migrate --force`. N’utilisez pas le `.env` local sur un serveur public.
@@ -193,7 +200,7 @@ L’accueil présente les statistiques du groupe aux super administrateurs et ad
 
 ### 9. Architecture et exploitation
 
-La stack actuelle remplace celle du document initial : **Laravel/PHP 8.3, Vue.js 3, Vite et MySQL 8 (Wampserver en local)**. L’application Laravel se trouve dans `backend-laravel/` ; les pages et composants Vue sont organisés dans `backend-laravel/resources/js/`. Laravel porte les modèles, contrôleurs, requêtes, middlewares, services, routes web/API, migrations et ressources. MySQL conserve les données métier ; les fichiers téléversés sont conservés dans le stockage persistant Laravel.
+La stack actuelle remplace celle du document initial : **Laravel/PHP 8.3, vues Blade, JavaScript natif et MySQL 8**. Les pages web sont des templates Blade dans `backend-laravel/resources/views/`; `backend-laravel/resources/js/blade.js` ne fournit que les interactions du navigateur et les appels vers l’API Laravel. Le bundle compilé est versionné dans `backend-laravel/public/build/assets/`. Node.js/npm ne sont requis ni pour démarrer ni pour déployer l’application; ils servent uniquement à reconstruire les assets lors du développement. Laravel porte les modèles, contrôleurs, requêtes, middlewares, services, routes web/API, migrations et ressources. MySQL conserve les données métier ; les fichiers téléversés sont conservés dans le stockage persistant Laravel.
 
 Le déploiement doit servir l’application depuis `backend-laravel/public`, avec HTTPS, `APP_DEBUG=false`, secrets conservés hors du dépôt, sauvegardes MySQL régulières et testées, stockage persistant des fichiers, migrations relues avant exécution et journalisation des actions sensibles. Le script de développement `scripts/start-local.ps1` n’est pas un serveur de production.
 

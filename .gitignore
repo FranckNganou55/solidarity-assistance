@@ -1,7 +1,11 @@
 # Build artefacts
 backend-laravel/vendor/
+backend/target/
 frontend-vue/node_modules/
 frontend-vue/dist/
+frontend/node_modules/
+frontend/dist/
+frontend/.expo/
 npm-debug.log*
 
 # Données PostgreSQL locales et fichiers téléversés — ne pas versionner ni supprimer.

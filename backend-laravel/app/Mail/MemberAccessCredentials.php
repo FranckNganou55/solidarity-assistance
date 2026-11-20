@@ -19,7 +19,7 @@ class MemberAccessCredentials extends Mailable
         public readonly string $memberName,
         public readonly string $groupName,
         public readonly string $identifier,
-        public readonly string $temporaryPassword,
+        public readonly ?string $temporaryPassword,
         public readonly string $loginUrl,
     ) {}
 

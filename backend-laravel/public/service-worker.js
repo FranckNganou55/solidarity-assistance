@@ -1,9 +1,10 @@
-const CACHE_NAME = 'makenene-solidarite-shell-v1'
+const CACHE_NAME = 'makenene-solidarite-shell-v3'
 const APP_SHELL = '/'
+const APP_ASSETS = ['/build/assets/app.js', '/build/assets/app.css']
 const APP_ICONS = ['/icons/icon-192.png', '/icons/icon-512.png', '/manifest.webmanifest']
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll([APP_SHELL, ...APP_ICONS])))
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll([APP_SHELL, ...APP_ASSETS, ...APP_ICONS])))
   self.skipWaiting()
 })
 
@@ -35,13 +36,13 @@ self.addEventListener('fetch', event => {
 
   if (url.pathname.startsWith('/build/assets/') || url.pathname.startsWith('/icons/')) {
     event.respondWith(
-      caches.match(request).then(cached => cached || fetch(request).then(response => {
+      fetch(request).then(response => {
         if (response.ok) {
           const copy = response.clone()
           caches.open(CACHE_NAME).then(cache => cache.put(request, copy))
         }
         return response
-      }))
+      }).catch(async () => (await caches.match(request)) || Response.error())
     )
   }
 })

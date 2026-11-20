@@ -2,26 +2,26 @@
 
 namespace Tests\Feature;
 
-// use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ExampleTest extends TestCase
 {
-    /**
-     * A basic test example.
-     */
-    public function test_browser_routes_load_the_vue_application_through_laravel(): void
+    public function test_browser_routes_render_server_side_blade_pages(): void
     {
         $this->get('/')
             ->assertOk()
-            ->assertViewIs('app')
-            ->assertSee('<div id="app"></div>', false);
+            ->assertViewIs('pages.landing')
+            ->assertSee('Choisissez votre groupe')
+            ->assertDontSee('<div id="app"></div>', false);
 
         $this->get('/login')
             ->assertOk()
-            ->assertViewIs('app')
-            ->assertSee('<div id="app"></div>', false);
+            ->assertViewIs('auth.login')
+            ->assertSee('data-login-form', false);
 
-        $this->get('/events/4')->assertOk()->assertViewIs('app');
+        $this->get('/events/4')
+            ->assertOk()
+            ->assertViewIs('pages.workspace')
+            ->assertSee('data-page="eventDetail"', false);
     }
 }

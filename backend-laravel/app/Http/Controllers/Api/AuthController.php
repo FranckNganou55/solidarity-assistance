@@ -45,13 +45,53 @@ class AuthController
             ->join('association_groups as ag', 'ag.id', '=', 'gm.group_id')
             ->where(['gm.member_id' => $member->id, 'gm.active' => true, 'ag.active' => true]);
         $requestedGroupId = isset($data['groupId']) ? (int) $data['groupId'] : null;
+        // A global administrator may sign in without choosing an association.
+        // Start in the oldest active group and ensure there is a membership row
+        // so the same account is represented consistently in group screens.
+        if ($member->super_admin && ! $requestedGroupId) {
+            $requestedGroupId = (int) DB::table('association_groups')->where('active', true)->orderBy('id')->value('id');
+            if ($requestedGroupId > 0) {
+                $memberRoleId = DB::table('roles')->where(['group_id' => $requestedGroupId, 'code' => 'MEMBRE'])->value('id');
+                if ($memberRoleId) {
+                    DB::table('group_members')->insertOrIgnore([
+                        'group_id' => $requestedGroupId,
+                        'member_id' => $member->id,
+                        'role_id' => $memberRoleId,
+                        'is_principal_admin' => false,
+                        'active' => (bool) $member->active,
+                        'cycle_contributions' => 0,
+                        'total_contributions' => 0,
+                        'joined_at' => now(),
+                    ]);
+                }
+            }
+        }
+        if ($member->super_admin && $requestedGroupId) {
+            $memberRoleId = DB::table('roles')->where(['group_id' => $requestedGroupId, 'code' => 'MEMBRE'])->value('id');
+            if ($memberRoleId && DB::table('association_groups')->where(['id' => $requestedGroupId, 'active' => true])->exists()) {
+                DB::table('group_members')->insertOrIgnore([
+                    'group_id' => $requestedGroupId,
+                    'member_id' => $member->id,
+                    'role_id' => $memberRoleId,
+                    'is_principal_admin' => false,
+                    'active' => (bool) $member->active,
+                    'cycle_contributions' => 0,
+                    'total_contributions' => 0,
+                    'joined_at' => now(),
+                ]);
+            }
+        }
         if ($requestedGroupId) {
             $memberships->where('gm.group_id', $requestedGroupId);
         } else {
             $memberships->orderByDesc('gm.is_principal_admin')->orderBy('gm.group_id');
         }
         $group = $memberships->select('gm.group_id')->first();
-        if (! $group) {
+        $firstGroupSetup = ! $group
+            && $member->super_admin
+            && ! $requestedGroupId
+            && ! DB::table('association_groups')->where('active', true)->exists();
+        if (! $group && ! $firstGroupSetup) {
             return response()->json([
                 'code' => $requestedGroupId ? 'account_not_in_group' : 'no_active_group',
                 'message' => $requestedGroupId

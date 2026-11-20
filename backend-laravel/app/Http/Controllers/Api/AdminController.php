@@ -5,19 +5,18 @@ namespace App\Http\Controllers\Api;
 use App\Http\Requests\StoreMemberRequest;
 use App\Http\Requests\UpdateMemberRequest;
 use App\Http\Resources\MemberResource;
-use App\Mail\MemberAccessCredentials;
 use App\Models\Member;
+use App\Repositories\MemberRepository;
 use App\Services\GroupAccessService;
 use App\Services\MemberManagementService;
+use App\Services\MemberCredentialsEmailService;
 use App\Services\PasswordHashService;
 use App\Services\SensitiveSettingsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
-use Throwable;
 
 class AdminController
 {
@@ -26,6 +25,8 @@ class AdminController
         private readonly MemberManagementService $memberManagement,
         private readonly PasswordHashService $passwords,
         private readonly SensitiveSettingsService $sensitiveSettings,
+        private readonly MemberCredentialsEmailService $credentialEmails,
+        private readonly MemberRepository $membersRepository,
     ) {}
 
     private array $catalog = [
@@ -137,41 +138,36 @@ class AdminController
         if (array_key_exists('requiredAssistancesOverride', $d)) {
             $this->allow($r, 'MEMBER_THRESHOLD_EDIT');
         }
-        if (Member::query()->where('phone', trim($d['phone']))->exists()) {
+        if ($this->membersRepository->phoneInUse($d['phone'])) {
             return response()->json(['code' => 'conflict', 'message' => 'Ce numéro est déjà utilisé'], 409);
         }
+        if ($this->membersRepository->emailInUse($d['email'] ?? null)) {
+            return response()->json(['code' => 'conflict', 'message' => 'Cette adresse e-mail est déjà associée à un autre compte'], 409);
+        }
         $created = $this->memberManagement->createForGroup($g, $d);
-        $credentialsEmailSent = false;
+        $credentialsEmailQueued = false;
         $emailFailureReason = null;
         $email = trim((string) $d['email']);
-        if (in_array(config('mail.default'), ['log', 'array'], true)) {
+        if ($email === '') {
+            $emailFailureReason = 'Aucune adresse e-mail n’est enregistrée pour ce membre.';
+        } elseif (in_array(config('mail.default'), ['log', 'array'], true)) {
             $emailFailureReason = 'Le transport e-mail n’est pas configuré pour un envoi réel.';
-        } elseif ($email !== '') {
-            try {
-                $groupName = (string) DB::table('association_groups')->where('id', $g)->value('name');
-                Mail::to($email)->send(new MemberAccessCredentials(
-                    trim($created['member']->first_name.' '.$created['member']->last_name),
-                    $groupName,
-                    $created['member']->phone,
-                    $created['temporaryPassword'],
-                    rtrim((string) config('app.url'), '/').'/login?group='.$g,
-                ));
-                $credentialsEmailSent = true;
-                Log::info('Member credential email accepted by the SMTP transport.', ['member_id' => $created['member']->id, 'group_id' => $g]);
-            } catch (Throwable $exception) {
-                $emailFailureReason = $this->safeMailFailureReason($exception);
-                Log::warning('Could not send new member access credentials.', [
-                    'member_id' => $created['member']->id,
-                    'group_id' => $g,
-                    'exception' => $exception::class,
-                    'reason' => $this->safeMailFailureReason($exception),
-                ]);
-            }
+        } else {
+            $groupName = (string) DB::table('association_groups')->where('id', $g)->value('name');
+            $credentialsEmailQueued = $this->credentialEmails->schedule(
+                $email,
+                trim($created['member']->first_name.' '.$created['member']->last_name),
+                $groupName,
+                $created['member']->phone,
+                $created['temporaryPassword'],
+                rtrim((string) config('app.url'), '/').'/login?group='.$g,
+                ['member_id' => $created['member']->id, 'group_id' => $g],
+            );
         }
         $row = DB::table('group_members as gm')->join('members as m', 'm.id', '=', 'gm.member_id')->join('roles as role', 'role.id', '=', 'gm.role_id')->where(['gm.group_id' => $g, 'm.id' => $created['member']->id])->select('gm.*', 'm.*', 'gm.role_id as role_id', 'gm.active as group_active', 'gm.cycle_contributions as group_cycle_contributions', 'gm.total_contributions as group_total_contributions', 'gm.required_assistances_override as group_required_assistances_override', 'gm.bureau_position as group_bureau_position', 'role.name', 'role.code')->first();
 
-        $response = ['member' => $this->memberDto($row, $g), 'credentialsEmailSent' => $credentialsEmailSent];
-        if (! $credentialsEmailSent) {
+        $response = ['member' => $this->memberDto($row, $g), 'credentialsEmailQueued' => $credentialsEmailQueued];
+        if (! $credentialsEmailQueued) {
             $response['temporaryPassword'] = $created['temporaryPassword'];
             if ($emailFailureReason !== null) {
                 $response['credentialsEmailError'] = $emailFailureReason;
@@ -191,6 +187,9 @@ class AdminController
         }
         $personalFields = ['firstName', 'lastName', 'phone', 'city', 'quarter', 'email', 'photoUrl', 'photoShape'];
         $member = Member::query()->findOrFail($id);
+        if ($this->membersRepository->emailInUse($d['email'] ?? null, (int) $member->id)) {
+            return response()->json(['code' => 'conflict', 'message' => 'Cette adresse e-mail est déjà associée à un autre compte'], 409);
+        }
         $personalColumns = ['firstName' => 'first_name', 'lastName' => 'last_name', 'phone' => 'phone', 'city' => 'city', 'quarter' => 'quarter', 'email' => 'email', 'photoUrl' => 'photo_url', 'photoShape' => 'photo_shape'];
         $changesPersonalData = false;
         foreach ($personalFields as $field) {
@@ -296,42 +295,27 @@ class AdminController
         $password = Str::random(10);
         DB::table('members')->where('id', $id)->update(['password_hash' => $this->passwords->make($password), 'must_change_password' => true]);
 
-        $credentialsEmailSent = false;
+        $credentialsEmailQueued = false;
         $emailFailureReason = null;
         if (! filled($target->email)) {
             $emailFailureReason = 'Aucune adresse e-mail n’est enregistrée pour ce membre.';
         } elseif (in_array(config('mail.default'), ['log', 'array'], true)) {
             $emailFailureReason = 'Le transport e-mail n’est pas configuré pour un envoi réel.';
         } else {
-            try {
-                $sentMessage = Mail::to($target->email)->send(new MemberAccessCredentials(
-                    trim($target->first_name.' '.$target->last_name),
-                    $target->group_name,
-                    $target->phone,
-                    $password,
-                    rtrim((string) config('app.url'), '/').'/login?group='.$groupId,
-                ));
-                $credentialsEmailSent = true;
-                Log::info('Reset member credential email accepted by the SMTP transport.', [
-                    'member_id' => $id,
-                    'group_id' => $groupId,
-                    'recipient' => $this->maskEmail($target->email),
-                    'message_id' => $sentMessage?->getMessageId(),
-                ]);
-            } catch (Throwable $exception) {
-                $emailFailureReason = $this->safeMailFailureReason($exception);
-                Log::warning('Could not send reset member access credentials.', [
-                    'member_id' => $id,
-                    'group_id' => $groupId,
-                    'exception' => $exception::class,
-                    'reason' => $this->safeMailFailureReason($exception),
-                ]);
-            }
+            $credentialsEmailQueued = $this->credentialEmails->schedule(
+                $target->email,
+                trim($target->first_name.' '.$target->last_name),
+                $target->group_name,
+                $target->phone,
+                $password,
+                rtrim((string) config('app.url'), '/').'/login?group='.$groupId,
+                ['member_id' => $id, 'group_id' => $groupId, 'reason' => 'password_reset'],
+            );
         }
 
-        return response()->json($credentialsEmailSent
-            ? ['credentialsEmailSent' => true]
-            : ['credentialsEmailSent' => false, 'temporaryPassword' => $password, 'credentialsEmailError' => $emailFailureReason]);
+        return response()->json($credentialsEmailQueued
+            ? ['credentialsEmailQueued' => true]
+            : ['credentialsEmailQueued' => false, 'temporaryPassword' => $password, 'credentialsEmailError' => $emailFailureReason]);
     }
 
     public function resetCycle(Request $r, int $id)
@@ -340,21 +324,6 @@ class AdminController
         DB::table('group_members')->where(['group_id' => $this->group($r), 'member_id' => $id])->update(['cycle_contributions' => 0]);
 
         return response()->json(['message' => 'Compteur remis à zéro']);
-    }
-
-    private function safeMailFailureReason(Throwable $exception): string
-    {
-        $reason = preg_replace('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i', '[email]', $exception->getMessage()) ?? 'Mail transport failed';
-        $reason = preg_replace('/(password|pass|token|secret|authorization)\s*[:=]\s*[^\s,;]+/i', '$1=[redacted]', $reason) ?? $reason;
-
-        return Str::limit($reason, 350);
-    }
-
-    private function maskEmail(string $email): string
-    {
-        [$local, $domain] = array_pad(explode('@', $email, 2), 2, '');
-
-        return $domain === '' ? '[email invalide]' : Str::substr($local, 0, 1).'***@'.$domain;
     }
 
     public function roles(Request $r)

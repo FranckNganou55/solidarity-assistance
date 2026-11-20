@@ -25,7 +25,7 @@ class AssociationGroup extends Model
 
     public function members(): BelongsToMany
     {
-        return $this->belongsToMany(Member::class, 'group_members')->withPivot([
+        return $this->belongsToMany(Member::class, 'group_members', 'group_id', 'member_id')->withPivot([
             'id', 'role_id', 'is_principal_admin', 'active', 'cycle_contributions',
             'total_contributions', 'required_assistances_override', 'bureau_position', 'joined_at',
         ]);

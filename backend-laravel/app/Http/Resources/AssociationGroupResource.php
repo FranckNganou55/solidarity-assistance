@@ -27,6 +27,7 @@ class AssociationGroupResource extends JsonResource
             'currency' => $this->resource['currency'],
             'minAssistancesRequired' => (int) $this->resource['minAssistancesRequired'],
             'principalAdmin' => (bool) $this->resource['principalAdmin'],
+            'active' => (bool) ($this->resource['active'] ?? true),
         ];
     }
 }

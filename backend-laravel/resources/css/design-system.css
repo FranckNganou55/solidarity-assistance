@@ -361,6 +361,188 @@ button:active {
         border-color var(--motion-fast) var(--ease-standard);
 }
 
+/* Shared interaction states keep actions consistent across every page. */
+.primary-button,
+.secondary-button,
+.small-primary,
+.small-danger,
+.small-button,
+.text-button,
+.icon-button,
+.back-link,
+.logout,
+.filter-tabs button,
+.notification-row,
+.photo-upload-button {
+    font-family: inherit;
+    font-weight: 650;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color var(--motion-fast) var(--ease-standard),
+        background-color var(--motion-fast) var(--ease-standard),
+        border-color var(--motion-fast) var(--ease-standard),
+        box-shadow var(--motion-fast) var(--ease-standard),
+        transform var(--motion-fast) var(--ease-standard),
+        opacity var(--motion-fast) var(--ease-standard);
+}
+
+.primary-button,
+.secondary-button,
+.small-primary,
+.small-danger,
+.small-button,
+.icon-button,
+.filter-tabs button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 40px;
+    line-height: 1.2;
+    text-decoration: none;
+}
+
+.primary-button,
+.small-primary {
+    border: 1px solid var(--primary);
+    border-radius: var(--radius-control);
+    box-shadow: 0 2px 4px rgb(30 111 92 / 12%);
+}
+
+.primary-button:hover,
+.small-primary:hover {
+    box-shadow: 0 5px 14px rgb(30 111 92 / 20%);
+}
+
+.secondary-button,
+.small-button {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    background: var(--card-bg);
+    color: var(--text);
+}
+
+.secondary-button:hover,
+.small-button:hover {
+    border-color: color-mix(in srgb, var(--primary) 38%, var(--line));
+    background: var(--primary-soft);
+    color: var(--primary);
+    box-shadow: 0 3px 10px rgb(16 24 40 / 7%);
+    transform: translateY(-1px);
+}
+
+.small-danger {
+    border: 1px solid color-mix(in srgb, var(--danger) 25%, white);
+    border-radius: var(--radius-control);
+    background: color-mix(in srgb, var(--danger) 8%, white);
+    color: #a93636;
+}
+
+.small-danger:hover {
+    border-color: var(--danger);
+    background: var(--danger);
+    color: #fff;
+    box-shadow: 0 4px 12px rgb(235 87 87 / 18%);
+    transform: translateY(-1px);
+}
+
+.text-button,
+.back-link {
+    min-height: 40px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--primary);
+}
+
+.text-button:hover,
+.back-link:hover {
+    background: var(--primary-soft);
+    color: var(--primary-strong);
+    text-decoration: none;
+}
+
+.icon-button:hover,
+.filter-tabs button:hover {
+    border-color: color-mix(in srgb, var(--primary) 35%, var(--line));
+    background: var(--primary-soft);
+    color: var(--primary);
+}
+
+.primary-button:active,
+.secondary-button:active,
+.small-primary:active,
+.small-danger:active,
+.small-button:active,
+.icon-button:active,
+.filter-tabs button:active {
+    transform: translateY(1px) scale(.99);
+    box-shadow: none;
+}
+
+.primary-button:focus-visible,
+.secondary-button:focus-visible,
+.small-primary:focus-visible,
+.small-danger:focus-visible,
+.small-button:focus-visible,
+.text-button:focus-visible,
+.icon-button:focus-visible,
+.back-link:focus-visible,
+.logout:focus-visible,
+.filter-tabs button:focus-visible,
+.notification-row:focus-visible,
+.photo-upload-button:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--secondary) 55%, transparent);
+    outline-offset: 2px;
+}
+
+.primary-button:disabled,
+.secondary-button:disabled,
+.small-primary:disabled,
+.small-danger:disabled,
+.small-button:disabled,
+.icon-button:disabled {
+    cursor: not-allowed;
+    opacity: .52;
+    box-shadow: none;
+    transform: none;
+}
+
+:root[data-theme='dark'] .secondary-button,
+:root[data-theme='dark'] .small-button {
+    border-color: var(--line);
+    background: #253346;
+    color: var(--text);
+}
+
+:root[data-theme='dark'] .small-danger {
+    border-color: #83484d;
+    background: #49272b;
+    color: #ffc0c4;
+}
+
+:root[data-theme='dark'] .small-danger:hover {
+    background: var(--danger);
+    color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .primary-button,
+    .secondary-button,
+    .small-primary,
+    .small-danger,
+    .small-button,
+    .text-button,
+    .icon-button,
+    .back-link,
+    .logout,
+    .filter-tabs button,
+    .notification-row,
+    .photo-upload-button {
+        transition: none;
+    }
+}
+
 .status-badge.validated,
 .status-badge.active {
     background: color-mix(in srgb, var(--success) 12%, white);
